@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && (request.auth.uid == userId);
+    }
+
+    // 1. Connection test endpoint
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // 2. User Profiles - strictly self-managed mutations, public read for rankings & fleet view
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isOwner(userId) || (isSignedIn() && request.resource.data.userId == request.auth.uid);
+      allow update: if isOwner(userId) || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow delete: if isOwner(userId) || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // 3. Global Chat Messages - strictly sender-owned write & auth check
+    match /chats/{messageId} {
+      allow read: if true;
+      allow create: if isSignedIn() 
+        && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if isSignedIn() 
+        && resource.data.senderId == request.auth.uid;
+    }
+
+    // 4. Friend Requests - player to player asynchronous invitations
+    match /friendRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid || 
+        resource.data.receiverId == request.auth.uid
+      );
+      allow create: if isSignedIn() 
+        && request.resource.data.senderId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.receiverId == request.auth.uid || 
+        resource.data.senderId == request.auth.uid
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid || 
+        resource.data.receiverId == request.auth.uid
+      );
+    }
+
+    // 5. Harbor Events - multiplayer attacks, rockets, steals, repairs, donations
+    match /harborEvents/{eventId} {
+      allow read: if isSignedIn() && (
+        resource.data.attackerId == request.auth.uid || 
+        resource.data.defenderId == request.auth.uid
+      );
+      allow create: if isSignedIn() 
+        && request.resource.data.attackerId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.defenderId == request.auth.uid || 
+        resource.data.attackerId == request.auth.uid
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.defenderId == request.auth.uid || 
+        resource.data.attackerId == request.auth.uid
+      );
+    }
+
+    // 6. Tribes / Alliances
+    match /tribes/{tribeId} {
+      allow read: if true;
+      allow create, update, delete: if isSignedIn();
+      
+      // Tribe subcollection messages
+      match /messages/{msgId} {
+        allow read: if true;
+        allow create, update, delete: if isSignedIn();
+      }
+    }
+
+    // 7. Support Tickets
+    match /support_tickets/{ticketId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // 8. Global Real-time Notifications / Banner Broadcasts (PvP attacks, Support, Milestones)
+    match /globalNotifications/{notifId} {
+      allow read: if true;
+      allow create: if isSignedIn() && (
+        request.resource.data.authorId == request.auth.uid ||
+        request.resource.data.senderId == request.auth.uid
+      );
+      allow update, delete: if isSignedIn() && (
+        resource.data.authorId == request.auth.uid ||
+        resource.data.senderId == request.auth.uid
+      );
+    }
+
+    // 9. Global Safety Net - deny all other requests
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

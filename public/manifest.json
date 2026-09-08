@@ -1,0 +1,38 @@
+{
+  "name": "ملوك الأعماق",
+  "short_name": "ملوك الأعماق",
+  "description": "لعبة ملوك الأعماق وصيد قراصنة البحار السبعة ومحاكاة الميناء الإمبراطوري",
+  "id": "kings-of-the-deep-pwa",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0b1329",
+  "theme_color": "#0b1329",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

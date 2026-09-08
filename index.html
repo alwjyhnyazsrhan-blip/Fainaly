@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ar" dir="rtl" class="notranslate">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=880, user-scalable=no" />
+    <meta name="google" content="notranslate" />
+    <title>ملوك الأعماق</title>
+    
+    <!-- Speed up external asset connections -->
+    <link rel="preconnect" href="https://raw.githubusercontent.com" crossorigin />
+    <link rel="dns-prefetch" href="https://raw.githubusercontent.com" />
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <link rel="dns-prefetch" href="https://images.unsplash.com" />
+
+    <!-- PWA Settings -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0b1329" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ملوك الأعماق" />
+
+    <style>
+      html, body, #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        touch-action: manipulation;
+        background-color: #0b1329;
+        color: #ffffff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      .initial-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        width: 100%;
+        background: radial-gradient(circle at center, #1e293b 0%, #0b1329 100%);
+        gap: 16px;
+      }
+      .initial-spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid rgba(56, 189, 248, 0.2);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 1s infinite linear;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+    <script>
+      // Prevent pinch-to-zoom on touchscreens
+      document.addEventListener('touchmove', function (event) {
+        if (event.touches.length > 1) {
+          event.preventDefault();
+        }
+      }, { passive: false });
+
+      // Prevent Safari gesture scaling
+      document.addEventListener('gesturestart', function (event) { event.preventDefault(); });
+      document.addEventListener('gesturechange', function (event) { event.preventDefault(); });
+      document.addEventListener('gestureend', function (event) { event.preventDefault(); });
+
+      // Register PWA Service Worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('PWA Service Worker registered!', reg))
+            .catch(err => console.error('PWA Service Worker registration failed!', err));
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="initial-loader">
+        <div style="font-size: 36px; animation: bounce 1.5s infinite;">⚓</div>
+        <div class="initial-spinner"></div>
+        <div style="font-size: 16px; color: #38bdf8; font-weight: bold; margin-top: 8px;">جاري تحميل لعبة ملوك الأعماق...</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

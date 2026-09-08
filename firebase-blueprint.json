@@ -1,0 +1,174 @@
+{
+  "entities": {
+    "user_profile": {
+      "title": "User Profile",
+      "description": "The user's game profile containing gold, gems, exp, stats, inventory, ships, tribe, and friends",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "avatar": { "type": "string" },
+        "server": { "type": "string" },
+        "pirateClass": { "type": "string" },
+        "gold": { "type": "integer" },
+        "gems": { "type": "integer" },
+        "exp": { "type": "integer" },
+        "redGems": { "type": "integer" },
+        "fishStorageLevel": { "type": "integer" },
+        "shipTowerLevel": { "type": "integer" },
+        "ships": { "type": "array" },
+        "crew": { "type": "array" },
+        "quests": { "type": "array" },
+        "weapons": { "type": "object" },
+        "fishInventory": { "type": "object" },
+        "crewServices": { "type": "object" },
+        "tribeId": { "type": "string" },
+        "tribeName": { "type": "string" },
+        "friends": { "type": "array" },
+        "friendRequests": { "type": "array" },
+        "battleReports": { "type": "array" },
+        "shipTowerPosition": {
+          "type": "object",
+          "properties": {
+            "left": { "type": "string" },
+            "top": { "type": "string" }
+          }
+        },
+        "currentSessionId": { "type": "string" },
+        "currentDeviceId": { "type": "string" },
+        "sessionStatus": { "type": "string" },
+        "lastLoginDevice": { "type": "string" },
+        "lastLoginAt": { "type": "string" },
+        "sessionUpdatedAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "username"]
+    },
+    "chat_message": {
+      "title": "Chat Message",
+      "description": "Global or tribe chat message",
+      "type": "object",
+      "properties": {
+        "sender": { "type": "string" },
+        "avatar": { "type": "string" },
+        "text": { "type": "string" },
+        "time": { "type": "string" },
+        "userId": { "type": "string" },
+        "tribeId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["sender", "text"]
+    },
+    "tribe": {
+      "title": "Tribe / Alliance",
+      "description": "Real multiplayer player alliance or pirate tribe",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "emblem": { "type": "string" },
+        "leaderId": { "type": "string" },
+        "leaderName": { "type": "string" },
+        "level": { "type": "integer" },
+        "power": { "type": "integer" },
+        "donations": { "type": "integer" },
+        "membersCount": { "type": "integer" },
+        "members": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "leaderId"]
+    },
+    "support_ticket": {
+      "title": "Support Ticket",
+      "description": "Player support inquiry or bug report",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "subject", "message"]
+    },
+    "friend_request": {
+      "title": "Friend Request",
+      "description": "Multiplayer friend invitation between players",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderAvatar": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "ACCEPTED", "DECLINED"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["senderId", "receiverId", "status"]
+    },
+    "harbor_event": {
+      "title": "Harbor Event",
+      "description": "Multiplayer harbor event (rocket strikes, thefts, repairs, gifts)",
+      "type": "object",
+      "properties": {
+        "attackerId": { "type": "string" },
+        "attackerName": { "type": "string" },
+        "attackerAvatar": { "type": "string" },
+        "defenderId": { "type": "string" },
+        "type": { "type": "string" },
+        "payload": { "type": "object" },
+        "status": { "type": "string", "enum": ["PENDING", "PROCESSED"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["attackerId", "defenderId", "type", "status"]
+    },
+    "global_notification": {
+      "title": "Global Notification Banner",
+      "description": "Real-time in-game broadcast notification for PvP attacks, support/reinforcements, and player milestones",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ATTACK", "SUPPORT", "MILESTONE"] },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "targetName": { "type": "string" },
+        "icon": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["type", "title", "message", "authorId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user_profile",
+      "description": "User game progress document stored by their unique auth UID"
+    },
+    "/chats/{chatId}": {
+      "schema": "chat_message",
+      "description": "Global chat message document"
+    },
+    "/tribes/{tribeId}": {
+      "schema": "tribe",
+      "description": "Pirate tribe / alliance document"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "support_ticket",
+      "description": "Support tickets submitted by authenticated players"
+    },
+    "/friendRequests/{requestId}": {
+      "schema": "friend_request",
+      "description": "Player-to-player friend requests"
+    },
+    "/harborEvents/{eventId}": {
+      "schema": "harbor_event",
+      "description": "Asynchronous multiplayer harbor interactions and attacks"
+    },
+    "/globalNotifications/{notificationId}": {
+      "schema": "global_notification",
+      "description": "Live real-time toasts and notification banners visible to all players"
+    }
+  }
+}
