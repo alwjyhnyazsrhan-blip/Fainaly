@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -18,6 +18,7 @@ export default function SigninScreen({ onSuccess, onNavigateToRegister, onNaviga
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
+  const googleLoginInProgress = useRef(false);
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -271,6 +272,8 @@ export default function SigninScreen({ onSuccess, onNavigateToRegister, onNaviga
   };
 
   const handleGoogleLogin = async () => {
+    if (googleLoginInProgress.current) return;
+    googleLoginInProgress.current = true;
     setGoogleLoading(true);
     setError('');
 
@@ -316,13 +319,22 @@ export default function SigninScreen({ onSuccess, onNavigateToRegister, onNaviga
         onSuccess(name, user.email);
       }
     } catch (err: any) {
-      console.error('Google auth popup error:', err);
+      if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+        console.warn('Google auth popup dismissed:', err.code);
+      } else {
+        console.warn('Google auth popup notice:', err);
+      }
       let userFriendlyMessage = 'حدث خطأ غير متوقع أثناء تسجيل الدخول عبر Google.';
       
       if (err.code === 'auth/popup-blocked') {
-        userFriendlyMessage = 'تم حظر النافذة المنبثقة من قبل المتصفح. يرجى تفعيل النوافذ المنبثقة لإتمام عملية تسجيل الدخول.';
+        userFriendlyMessage = 'تم حظر النافذة المنبثقة من قبل المتصفح. يرجى تفعيل النوافذ المنبثقة أو استخدام الدخول السريع أدناه.';
+        setShowDomainModal(true);
       } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-        userFriendlyMessage = 'تم إلغاء عملية تسجيل الدخول من قبلك.';
+        userFriendlyMessage = 'تم إغلاق نافذة تسجيل الدخول. يمكنك المحاولة مجدداً أو استخدام الدخول السريع.';
+      } else if (err.code === 'auth/network-request-failed') {
+        userFriendlyMessage = 'تعذر الاتصال بالنافذة المنبثقة داخل إطار العرض. تم فتح بوابة الدخول السريع ببريد Google.';
+        setCurrentHostname(window.location.hostname);
+        setShowDomainModal(true);
       } else if (err.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
         userFriendlyMessage = 'هذا النطاق غير مصرّح به لتسجيل الدخول عبر Google في مشروع Firebase.';
         setCurrentHostname(window.location.hostname);
@@ -330,6 +342,7 @@ export default function SigninScreen({ onSuccess, onNavigateToRegister, onNaviga
       }
       setError(userFriendlyMessage);
     } finally {
+      googleLoginInProgress.current = false;
       setGoogleLoading(false);
     }
   };
@@ -578,8 +591,16 @@ export default function SigninScreen({ onSuccess, onNavigateToRegister, onNaviga
                 <div className="flex gap-2 justify-end mt-4">
                   <button
                     type="button"
+                    onClick={() => window.open(window.location.href, '_blank')}
+                    className="flex-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 text-[11px] py-2 rounded-lg font-bold transition-all border border-amber-500/40 cursor-pointer flex items-center justify-center gap-1"
+                  >
+                    <span>فتح في تبويب مستقل</span>
+                    <span>↗</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setShowDomainModal(false)}
-                    className="w-full bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white text-[11px] py-2 rounded-lg font-bold transition-all border border-gray-800 cursor-pointer"
+                    className="flex-1 bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white text-[11px] py-2 rounded-lg font-bold transition-all border border-gray-800 cursor-pointer"
                   >
                     إغلاق البوابة
                   </button>

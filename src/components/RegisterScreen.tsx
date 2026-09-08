@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -21,6 +21,7 @@ export default function RegisterScreen({ onSuccess, onNavigateToLogin, onNavigat
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const googleRegisterInProgress = useRef(false);
 
   const [usernameFocused, setUsernameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
@@ -156,6 +157,8 @@ export default function RegisterScreen({ onSuccess, onNavigateToLogin, onNavigat
   };
 
   const handleGoogleLogin = async () => {
+    if (googleRegisterInProgress.current) return;
+    googleRegisterInProgress.current = true;
     setLoading(true);
     setError('');
 
@@ -200,19 +203,24 @@ export default function RegisterScreen({ onSuccess, onNavigateToLogin, onNavigat
         onSuccess(name, user.email);
       }
     } catch (err: any) {
-      console.error('Google auth register error:', err);
+      if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+        console.warn('Google auth register popup dismissed:', err.code);
+      } else {
+        console.warn('Google auth register notice:', err);
+      }
       let userFriendlyMessage = 'حدث خطأ غير متوقع أثناء تسجيل الدخول أو إنشاء الحساب عبر Google.';
       
       if (err.code === 'auth/popup-blocked') {
-        userFriendlyMessage = 'تم حظر النافذة المنبثقة من قبل المتصفح. يرجى السماح بالنوافذ المنبثقة لإتمام العملية.';
+        userFriendlyMessage = 'تم حظر النافذة المنبثقة من قبل المتصفح. يرجى السماح بالنوافذ المنبثقة أو استخدام الدخول السريع في شاشة الدخول.';
       } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
-        userFriendlyMessage = 'تم إلغاء عملية الدخول عبر Google.';
-      } else if (err.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
+        userFriendlyMessage = 'تم إغلاق نافذة الدخول عبر Google.';
+      } else if (err.code === 'auth/network-request-failed' || err.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
         onNavigateToLogin();
         return;
       }
       setError(userFriendlyMessage);
     } finally {
+      googleRegisterInProgress.current = false;
       setLoading(false);
     }
   };

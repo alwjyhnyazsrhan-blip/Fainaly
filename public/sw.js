@@ -60,12 +60,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip dynamic API / Firebase calls
+  // Skip dynamic API, Firebase, Google Authentication, and dev server requests
   if (
     url.includes('firestore.googleapis.com') || 
     url.includes('identitytoolkit.googleapis.com') ||
     url.includes('securetoken.googleapis.com') ||
-    url.includes('googleapis.com')
+    url.includes('googleapis.com') ||
+    url.includes('firebaseapp.com') ||
+    url.includes('google.com') ||
+    url.includes('gstatic.com') ||
+    url.includes('/api/') ||
+    url.includes('/@vite') ||
+    url.includes('/@fs') ||
+    url.includes('/@id') ||
+    url.includes('/src/') ||
+    url.includes('chrome-extension')
   ) {
     return;
   }
@@ -134,7 +143,11 @@ self.addEventListener('fetch', (event) => {
       })
     );
   } else {
-    // Network-First with Cache Fallback
+    // Only intercept same-origin static requests
+    if (!url.startsWith(self.location.origin)) {
+      return;
+    }
+    // Network-First with Cache Fallback for same-origin assets
     event.respondWith(
       fetch(event.request)
         .then((response) => {
@@ -146,8 +159,13 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          return caches.match(event.request, { ignoreSearch: true });
+        .catch(async () => {
+          const cached = await caches.match(event.request, { ignoreSearch: true });
+          if (cached) {
+            return cached;
+          }
+          // Prevent undefined response which triggers "Script error." in browsers
+          return new Response('Network unavailable', { status: 503, statusText: 'Service Unavailable' });
         })
     );
   }

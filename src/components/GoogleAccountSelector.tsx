@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { registerNewUserSession } from '../services/sessionManager';
@@ -10,8 +10,11 @@ interface GoogleAccountSelectorProps {
 export default function GoogleAccountSelector({ onSelectAccount }: GoogleAccountSelectorProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const loginInProgress = useRef(false);
 
   const handleGoogleLogin = async () => {
+    if (loginInProgress.current) return;
+    loginInProgress.current = true;
     setLoading(true);
     setError('');
 
@@ -73,11 +76,12 @@ export default function GoogleAccountSelector({ onSelectAccount }: GoogleAccount
       } else if (err.code === 'auth/popup-closed-by-user') {
         userFriendlyMessage = 'تم إغلاق نافذة تسجيل الدخول قبل إتمام العملية.';
       } else if (err.code === 'auth/network-request-failed') {
-        userFriendlyMessage = 'فشل الاتصال بالشبكة. يرجى التحقق من اتصالك بالإنترنت وإعادة المحاولة.';
+        userFriendlyMessage = 'تعذر الاتصال بنافذة Google بسبب قيود المتصفح أو حظر ملفات تعريف الارتباط. يرجى تجربة فتح اللعبة في نافذة جديدة أو التحقق من الاتصال.';
       }
       
       setError(userFriendlyMessage);
     } finally {
+      loginInProgress.current = false;
       setLoading(false);
     }
   };

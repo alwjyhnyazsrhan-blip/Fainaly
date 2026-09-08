@@ -15,6 +15,11 @@ async function startServer() {
   // Middleware to parse JSON
   app.use(express.json());
 
+  // Health check endpoint for container probes
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
+
   // API Route: Database User Profile Sync & Fetch (Strictly targeting kingofdeep Cloud Firestore)
   app.get("/api/db/user", requireAuth, async (req: AuthRequest, res) => {
     try {

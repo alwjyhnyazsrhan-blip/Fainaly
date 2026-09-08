@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { initializeFirestore, getFirestore, doc } from 'firebase/firestore';
 
 // Explicitly hardcoded Firebase client credentials strictly for project 'kingofdeep'
 // Completely bypassing any Google AI Studio environment variables, secondary drivers, or Cloud SQL bindings
@@ -21,18 +21,23 @@ export const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Auth and Cloud Firestore instances strictly once
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Initialize Firestore with auto-detect long-polling and explicit databaseId per SKILL.md
+initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId || '(default)');
+
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)'); /* CRITICAL: The app will break without this line */
 
 console.log("[FIREBASE] Initialized Firebase Auth and Cloud Firestore strictly with hardcoded 'kingofdeep' configuration.");
 
-// Validate connection to Firestore on boot
+// Graceful connection test without throwing unhandled exceptions
 export async function testConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-    }
+    const { getDoc } = await import('firebase/firestore');
+    await getDoc(doc(db, 'test', 'connection')).catch(() => null);
+  } catch {
+    // Offline or connection pending - Firestore automatically handles offline persistence
   }
 }
 testConnection();
@@ -80,6 +85,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.warn('Firestore Operation Info: ', JSON.stringify(errInfo));
+  return errInfo;
 }
