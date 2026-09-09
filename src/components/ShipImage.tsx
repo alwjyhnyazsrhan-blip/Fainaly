@@ -102,42 +102,48 @@ export const getShipCardRect = (level: number): CardRect => {
   }
 };
 
+const getLocalShipUrl = (lvl: number): string => {
+  const safeLvl = Math.max(0, Math.min(Number(lvl) || 0, 35));
+  return `/ships/ship_${String(safeLvl).padStart(2, '0')}.webp`;
+};
+
 const SHIP_IMAGES_1_TO_31: Record<number, string> = {
-  1: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_01.png',
-  2: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_02.png',
-  3: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_03.png',
-  4: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_04.png',
-  5: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_05.png',
-  6: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_06.png',
-  7: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_07.png',
-  8: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_08.png',
-  9: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_09.png',
-  10: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_10.png',
-  11: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_11.png',
-  12: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship_12.png',
-  13: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/13_ship.png',
-  14: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/14_ship.png',
-  15: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-15-great-ocean.png',
-  16: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-16-legends.png',
-  17: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/17_ship.png',
-  18: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/18_alfateh.png',
-  19: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/19_alnasr.png',
-  20: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/20_alhaymana.png',
-  21: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/21_ali3sar.png',
-  22: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/22_althalam.png',
-  23: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/23_almalakiya.png',
-  24: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/24_almuheet.png',
-  25: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-25.png',
-  26: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-26.png',
-  27: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-27.png',
-  28: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-28.png',
-  29: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-29.png',
-  30: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-30.png',
-  31: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-31.png',
-  32: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/submarine-no-bg.png',
-  33: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/submarine-no-bg%20(1).png',
-  34: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/d1b937aa-cc63-4875-8380-496b97471769.png',
-  35: 'https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/f764acf4-ad72-4091-ab03-cafe3551a938.png',
+  0: '/ships/ship_00.webp',
+  1: '/ships/ship_01.webp',
+  2: '/ships/ship_02.webp',
+  3: '/ships/ship_03.webp',
+  4: '/ships/ship_04.webp',
+  5: '/ships/ship_05.webp',
+  6: '/ships/ship_06.webp',
+  7: '/ships/ship_07.webp',
+  8: '/ships/ship_08.webp',
+  9: '/ships/ship_09.webp',
+  10: '/ships/ship_10.webp',
+  11: '/ships/ship_11.webp',
+  12: '/ships/ship_12.webp',
+  13: '/ships/ship_13.webp',
+  14: '/ships/ship_14.webp',
+  15: '/ships/ship_15.webp',
+  16: '/ships/ship_16.webp',
+  17: '/ships/ship_17.webp',
+  18: '/ships/ship_18.webp',
+  19: '/ships/ship_19.webp',
+  20: '/ships/ship_20.webp',
+  21: '/ships/ship_21.webp',
+  22: '/ships/ship_22.webp',
+  23: '/ships/ship_23.webp',
+  24: '/ships/ship_24.webp',
+  25: '/ships/ship_25.webp',
+  26: '/ships/ship_26.webp',
+  27: '/ships/ship_27.webp',
+  28: '/ships/ship_28.webp',
+  29: '/ships/ship_29.webp',
+  30: '/ships/ship_30.webp',
+  31: '/ships/ship_31.webp',
+  32: '/ships/ship_32.webp',
+  33: '/ships/ship_33.webp',
+  34: '/ships/ship_34.webp',
+  35: '/ships/ship_35.webp',
 };
 
 const SHIP_SCALES: Record<number, number> = {
@@ -184,102 +190,35 @@ const SHIP_TRANSLATES: Record<number, string> = {
 };
 
 const ShipImage: React.FC<ShipImageProps> = ({ level, width = 140, plain = false, fill = false }) => {
-  if (level === 0) {
-    const containerHeight = plain ? width * 0.95 : width * 0.9; // consistent aspect ratio
-    return (
-      <div
-        id="ship-image-lvl0"
-        style={{
-          width: fill ? '100%' : `${width}px`,
-          height: fill ? '100%' : `${containerHeight}px`,
-          minHeight: fill ? '100%' : `${containerHeight}px`,
-          maxWidth: '100%',
-          backgroundImage: `url('https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/copilot_image_1782937110028.jpeg')`,
-          backgroundPosition: 'center',
-          backgroundSize: 'contain',
-          backgroundRepeat: 'no-repeat',
-          margin: '0 auto',
-          borderRadius: '12px',
-          boxShadow: plain ? 'none' : '0 4px 10px rgba(0,0,0,0.6)',
-          border: plain ? 'none' : '2px solid #ca8a04',
-          overflow: 'hidden',
-          position: 'relative',
-          backgroundColor: plain ? 'transparent' : '#140c06',
-          transform: 'scale(1.0)',
-          transformOrigin: 'center center',
-          WebkitMaskImage: plain ? 'radial-gradient(ellipse 65% 55% at 50% 50%, black 40%, rgba(0,0,0,0.85) 60%, transparent 92%)' : undefined,
-          maskImage: plain ? 'radial-gradient(ellipse 65% 55% at 50% 50%, black 40%, rgba(0,0,0,0.85) 60%, transparent 92%)' : undefined,
-        }}
-      />
-    );
-  }
-
-  if (level >= 1 && level <= 35) {
-    const imageUrl = SHIP_IMAGES_1_TO_31[level];
-    if (imageUrl) {
-      const containerHeight = plain ? width * 0.95 : width * 0.9; // generous taller aspect ratio to significantly enlarge ship images!
-      const scaleVal = SHIP_SCALES[level] || 1.35;
-      const translateYVal = SHIP_TRANSLATES[level] || '0px';
-      return (
-        <div
-          id={`ship-image-lvl${level}`}
-          style={{
-            width: fill ? '100%' : `${width}px`,
-            height: fill ? '100%' : `${containerHeight}px`,
-            minHeight: fill ? '100%' : `${containerHeight}px`,
-            maxWidth: '100%',
-            backgroundImage: `url('${imageUrl}')`,
-            backgroundPosition: 'center',
-            backgroundSize: 'contain', // ensure the ship appears fully and perfectly
-            backgroundRepeat: 'no-repeat',
-            margin: '0 auto',
-            borderRadius: '12px',
-            boxShadow: plain ? 'none' : '0 4px 10px rgba(0,0,0,0.6)',
-            border: plain ? 'none' : '2px solid #ca8a04',
-            overflow: 'hidden',
-            position: 'relative',
-            backgroundColor: plain ? 'transparent' : '#140c06', // beautiful dark wood theme background
-            transform: `scale(${scaleVal}) translateY(${translateYVal})`,
-            transformOrigin: 'center center',
-            WebkitMaskImage: plain ? 'radial-gradient(ellipse 65% 55% at 50% 50%, black 40%, rgba(0,0,0,0.85) 60%, transparent 92%)' : undefined,
-            maskImage: plain ? 'radial-gradient(ellipse 65% 55% at 50% 50%, black 40%, rgba(0,0,0,0.85) 60%, transparent 92%)' : undefined,
-          }}
-        />
-      );
-    }
-  }
-
-  const rect = getShipCardRect(level);
-  
-  // Scale calculations for background-size and position
-  const scale = width / rect.width;
-  const scaledBackgroundWidth = rect.sheetWidth * scale;
-  const scaledBackgroundHeight = rect.sheetHeight * scale;
-  
-  const bgX = -rect.x * scale;
-  const bgY = -rect.y * scale;
-  const containerHeight = plain ? width * 0.7 : rect.height * scale;
+  const safeLvl = Math.max(0, Math.min(Number(level) || 0, 35));
+  const containerHeight = plain ? width * 0.95 : width * 0.9;
+  const localUrl = getLocalShipUrl(safeLvl);
+  const scaleVal = SHIP_SCALES[safeLvl] || (safeLvl === 0 ? 1.0 : 1.35);
+  const translateYVal = SHIP_TRANSLATES[safeLvl] || '0px';
 
   return (
     <div
+      id={`ship-image-lvl${safeLvl}`}
       style={{
-        width: `${width}px`,
-        height: `${containerHeight}px`,
-        backgroundImage: `url('${rect.imageUrl}')`,
-        backgroundPosition: `${bgX}px ${bgY}px`,
-        backgroundSize: `${scaledBackgroundWidth}px ${scaledBackgroundHeight}px`,
+        width: fill ? '100%' : `${width}px`,
+        height: fill ? '100%' : `${containerHeight}px`,
+        minHeight: fill ? '100%' : `${containerHeight}px`,
+        maxWidth: '100%',
+        backgroundImage: `url('${localUrl}')`,
+        backgroundPosition: 'center',
+        backgroundSize: 'contain',
         backgroundRepeat: 'no-repeat',
         margin: '0 auto',
-        borderRadius: plain ? '12px' : '8px',
-        boxShadow: plain ? 'none' : '0 3px 6px rgba(0,0,0,0.5)',
-        border: plain ? 'none' : '1.5px solid #ca8a04',
+        borderRadius: '12px',
+        boxShadow: plain ? 'none' : '0 4px 10px rgba(0,0,0,0.6)',
+        border: plain ? 'none' : '2px solid #ca8a04',
         overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: plain ? 'transparent' : '#140c06',
+        transform: `scale(${scaleVal}) translateY(${translateYVal})`,
+        transformOrigin: 'center center',
         WebkitMaskImage: plain ? 'radial-gradient(ellipse 65% 55% at 50% 50%, black 40%, rgba(0,0,0,0.85) 60%, transparent 92%)' : undefined,
         maskImage: plain ? 'radial-gradient(ellipse 65% 55% at 50% 50%, black 40%, rgba(0,0,0,0.85) 60%, transparent 92%)' : undefined,
-        willChange: 'transform',
-        transform: 'translateZ(0)',
-        backfaceVisibility: 'hidden',
-        WebkitBackfaceVisibility: 'hidden'
       }}
     />
   );

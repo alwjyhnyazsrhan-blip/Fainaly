@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { ShipState, ChatMessage, Tribe, CrewMember, Quest, BattleReport, GlobalNotification, NotificationEventType } from './types';
 import { SHOP_SHIPS, FISH_REWARD_DATA, getHarborImageUrl, FISH_HOUSE_LEVELS, getFishHouseImageUrl, getFishHouseCapacity, getShipCapacity, GOLD_COIN_ICON, GEM_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS } from './data';
 import FishHouseComponent from './components/FishHouseComponent';
@@ -323,7 +323,7 @@ export default function App() {
           if (typeof snapData.redGems === 'number') setRedGems(snapData.redGems);
           if (typeof snapData.fishStorageLevel === 'number') setFishStorageLevel(snapData.fishStorageLevel);
           if (typeof snapData.shipTowerLevel === 'number') setShipTowerLevel(snapData.shipTowerLevel);
-          if (snapData.ships && Array.isArray(snapData.ships)) setShips(snapData.ships);
+          if (snapData.ships && Array.isArray(snapData.ships)) setShips(snapData.ships.map((s: any) => ({ ...s, moving: false })));
           if (snapData.quests) setQuests(snapData.quests);
         }
       }, (err) => {
@@ -655,7 +655,8 @@ export default function App() {
               ...s,
               exists: s.exists !== undefined ? s.exists : true,
               assignedCrew: validCrew,
-              crewPower: validCrew.length * 15
+              crewPower: validCrew.length * 15,
+              moving: false
             };
           });
           if (sanitized.length > 0) {
@@ -2696,7 +2697,8 @@ export default function App() {
   }, [exp]);
 
   useEffect(() => {
-    localStorage.setItem('pirate_ships_v2', JSON.stringify(ships));
+    const cleanToStore = ships.map(s => ({ ...s, moving: false }));
+    localStorage.setItem('pirate_ships_v2', JSON.stringify(cleanToStore));
   }, [ships]);
 
   useEffect(() => {
@@ -2831,21 +2833,18 @@ export default function App() {
     { id: 25, left: '62%', top: '56%', size: '6px', delay: '0.2s', dur: '3.2s' }
   ];
 
-  // --- Automatic ship coordinate migration ---
+  // --- Automatic ship coordinate & state migration ---
   useEffect(() => {
     setShips(prev => prev.map(s => {
-      if (s.status === 'docked') {
-        const correctDock = docks[s.id];
-        if (correctDock && (s.left !== correctDock.l || s.top !== correctDock.t)) {
-          return { ...s, left: correctDock.l, top: correctDock.t };
-        }
-      } else if (s.status === 'fishing') {
-        const correctFish = fishSpots[s.id];
-        if (correctFish && (s.left !== correctFish.l || s.top !== correctFish.t)) {
-          return { ...s, left: correctFish.l, top: correctFish.t };
-        }
-      }
-      return s;
+      const correctDock = docks[s.id] || { l: '45%', t: '48%' };
+      const correctFish = fishSpots[s.id] || { l: '70%', t: '48%' };
+      const nextPos = s.status === 'fishing' ? correctFish : correctDock;
+      return {
+        ...s,
+        moving: false,
+        left: nextPos.l,
+        top: nextPos.t
+      };
     }));
   }, [isLoggedIn]);
 
@@ -2975,7 +2974,7 @@ export default function App() {
             if (typeof data.fishStorageLevel === 'number') setFishStorageLevel(data.fishStorageLevel);
             if (typeof data.shipTowerLevel === 'number') setShipTowerLevel(data.shipTowerLevel);
             
-            if (data.ships) setShips(data.ships);
+            if (data.ships && Array.isArray(data.ships)) setShips(data.ships.map((s: any) => ({ ...s, moving: false })));
             if (data.crew) setCrew(data.crew);
             if (data.quests) setQuests(data.quests);
             if (data.battleReports) setBattleReports(data.battleReports);
@@ -3101,7 +3100,7 @@ export default function App() {
               setShipTowerLevel(prev => typeof data.shipTowerLevel === 'number' && data.shipTowerLevel !== prev ? data.shipTowerLevel : prev);
               
               if (data.ships && Array.isArray(data.ships) && data.ships.length > 0) {
-                setShips(data.ships);
+                setShips(data.ships.map((s: any) => ({ ...s, moving: false })));
                 localStorage.setItem('pirate_ships', JSON.stringify(data.ships));
               }
               if (data.crew) setCrew(data.crew);
@@ -3346,7 +3345,7 @@ export default function App() {
         if (typeof data.redGems === 'number') setRedGems(data.redGems);
         if (typeof data.fishStorageLevel === 'number') setFishStorageLevel(data.fishStorageLevel);
         if (typeof data.shipTowerLevel === 'number') setShipTowerLevel(data.shipTowerLevel);
-        if (data.ships) setShips(data.ships);
+        if (data.ships && Array.isArray(data.ships)) setShips(data.ships.map((s: any) => ({ ...s, moving: false })));
         if (data.crew) setCrew(data.crew);
         if (data.quests) setQuests(data.quests);
         if (data.battleReports) setBattleReports(data.battleReports);
@@ -4159,9 +4158,26 @@ export default function App() {
   };
 
   // --- Dedicated Single-Ship Action Handlers (supports manual & autonomous Golden Hunter) ---
-  const startShipFishing = (targetShipId: string) => {
+  const startShipFishing = (targetShipId: string, isAuto = false) => {
     if (!targetShipId) return;
     updateQuestProgress('q1', 1);
+
+    const selectedShip = ships.find(s => s.id === targetShipId);
+    const shipCrew = selectedShip?.assignedCrew || [];
+    const isAutoActive = isAuto || (!selectedShip?.autoFishingPaused && (shipCrew.includes('golden_hunter') || shipCrew.includes('gold_fisher')));
+
+    const isEngineUpgraded = selectedShip?.hasEngineUpgrade;
+    const speedLvl = selectedShip?.speedLevel || 1;
+    const speedMultiplier = 1 + (speedLvl - 1) * 0.08;
+    const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
+
+    // Calculate sail-out duration: normally 1.8s (1800ms)
+    // When auto-fishing is active, accelerate the trip significantly so auto-fishing is ultra fast!
+    let sailOutDuration = isAutoActive ? (isEngineUpgraded ? 220 : 340) : (isEngineUpgraded ? 900 : 1800);
+    sailOutDuration = Math.max(120, Math.floor(sailOutDuration / speedMultiplier));
+    if (isSailorActive) {
+      sailOutDuration = Math.floor(sailOutDuration * 0.5);
+    }
 
     setShips(prev =>
       prev.map(s => {
@@ -4170,10 +4186,11 @@ export default function App() {
             ...s,
             scaleX: 1,
             moving: true,
+            lastMoveTime: Date.now(),
             status: 'fishing',
             left: fishSpots[s.id]?.l || '80%',
             top: fishSpots[s.id]?.t || '41%',
-            transitionDuration: '1.8s'
+            transitionDuration: `${sailOutDuration}ms`
           };
         }
         return s;
@@ -4187,13 +4204,14 @@ export default function App() {
           if (s.id === targetShipId && s.status === 'fishing') {
             return {
               ...s,
-              moving: false
+              moving: false,
+              lastMoveTime: 0
             };
           }
           return s;
         })
       );
-    }, 1800);
+    }, sailOutDuration);
   };
 
   const collectShipFish = (targetShipId: string, isAuto = false) => {
@@ -4204,6 +4222,10 @@ export default function App() {
     const isEngineUpgraded = selectedShip.hasEngineUpgrade;
     const isNetUpgraded = selectedShip.hasNetUpgrade;
     const crewPowerBonus = selectedShip.crewPower || 0;
+    const shipCrew = selectedShip.assignedCrew || [];
+    const isAutoActive = isAuto || (!selectedShip.autoFishingPaused && (shipCrew.includes('golden_hunter') || shipCrew.includes('gold_fisher')));
+
+    const flipDuration = isAutoActive ? 90 : 500;
 
     // Start the return action: Flip direction facing left
     setShips(prev =>
@@ -4212,20 +4234,20 @@ export default function App() {
           return {
             ...s,
             moving: true,
+            lastMoveTime: Date.now(),
             scaleX: -1,
-            transitionDuration: '0.5s'
+            transitionDuration: `${flipDuration}ms`
           };
         }
         return s;
       })
     );
 
-    let returnTripDuration = isEngineUpgraded ? 800 : 1800;
+    let returnTripDuration = isAutoActive ? (isEngineUpgraded ? 220 : 340) : (isEngineUpgraded ? 800 : 1800);
     const speedLvl = selectedShip.speedLevel || 1;
     const speedMultiplier = 1 + (speedLvl - 1) * 0.08;
-    returnTripDuration = Math.max(200, Math.floor(returnTripDuration / speedMultiplier));
+    returnTripDuration = Math.max(120, Math.floor(returnTripDuration / speedMultiplier));
 
-    const shipCrew = selectedShip.assignedCrew || [];
     const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
     const isLuckActive = shipCrew.includes('luck');
     const isGuidedActive = shipCrew.includes('guide');
@@ -4235,13 +4257,15 @@ export default function App() {
       returnTripDuration = Math.floor(returnTripDuration * 0.5);
     }
 
-    // After 500ms (direction flip animation finished), start physical sailing glide to the dock coordinates
+    // After flip animation finished, start physical sailing glide to the dock coordinates
     setTimeout(() => {
       setShips(prev =>
         prev.map(s => {
           if (s.id === targetShipId) {
             return {
               ...s,
+              moving: true,
+              lastMoveTime: Date.now(),
               left: docks[s.id]?.l || '44%',
               top: docks[s.id]?.t || '41%',
               transitionDuration: `${returnTripDuration}ms`
@@ -4259,13 +4283,13 @@ export default function App() {
         const sy = parseFloat(dockPos.t) || 48;
         
         window.dispatchEvent(new CustomEvent('spawn-pirate-particles', {
-          detail: { x: sx, y: sy, type: 'water-splash', count: 20 }
+          detail: { x: sx, y: sy, type: 'water-splash', count: 15 }
         }));
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('spawn-pirate-particles', {
-            detail: { x: sx, y: sy, type: 'gold-gain', count: 15 }
+            detail: { x: sx, y: sy, type: 'gold-gain', count: 12 }
           }));
-        }, 300);
+        }, isAutoActive ? 150 : 300);
 
         setShips(prev =>
           prev.map(s => {
@@ -4275,7 +4299,8 @@ export default function App() {
                 scaleX: 1,
                 status: 'docked',
                 moving: false,
-                transitionDuration: '1.8s'
+                lastMoveTime: 0,
+                transitionDuration: isAutoActive ? '0.3s' : '1.8s'
               };
             }
             return s;
@@ -4322,14 +4347,24 @@ export default function App() {
         const currentTotalFish = getTotalFish() as number;
         const maxCapacity = getFishHouseCapacity(fishStorageLevel);
         let finalTotalAmount = totalAmount as number;
+        let overflowAmount = 0;
         if (currentTotalFish + (totalAmount as number) > maxCapacity) {
           finalTotalAmount = Math.max(0, maxCapacity - currentTotalFish);
-          if (finalTotalAmount === 0 && totalAmount > 0 && !isAuto) {
-            alert('المخزن ممتلئ! لا يمكنك جمع المزيد من الأسماك.');
-          }
+          overflowAmount = Math.max(0, (totalAmount as number) - finalTotalAmount);
         }
 
-        const goldReward = Math.floor(finalTotalAmount * fishInfo.valPerFish * storageMultiplier);
+        const normalGoldReward = Math.floor(finalTotalAmount * fishInfo.valPerFish * storageMultiplier);
+        // Excess fish caught beyond warehouse capacity are automatically converted into gold so collection NEVER stops!
+        const overflowGoldReward = Math.floor(overflowAmount * fishInfo.valPerFish * storageMultiplier);
+        const goldReward = normalGoldReward + overflowGoldReward;
+
+        if (overflowGoldReward > 0) {
+          setGold(prev => {
+            const nextGold = prev + overflowGoldReward;
+            localStorage.setItem('pirate_gold', String(nextGold));
+            return nextGold;
+          });
+        }
         
         let expReward = Math.floor(5 + Math.random() * 5);
         if (isGuidedActive) {
@@ -4352,7 +4387,7 @@ export default function App() {
         if (!isAuto) {
           setRewardFish({
             name: fishInfo.fullName,
-            amount: finalTotalAmount,
+            amount: finalTotalAmount > 0 ? finalTotalAmount : totalAmount,
             value: goldReward,
             luckDoubled: isLuckActive,
             guided: isGuidedActive,
@@ -4360,15 +4395,183 @@ export default function App() {
           setRewardModal(true);
         }
       }, returnTripDuration);
-    }, 500);
+    }, flipDuration);
   };
+
+  // --- Offline Auto-Fishing & Gathering Progress Catch-Up Engine ---
+  const processOfflineAutoHarvest = useCallback(() => {
+    const lastActiveStr = localStorage.getItem('pirate_last_active_time');
+    const now = Date.now();
+    localStorage.setItem('pirate_last_active_time', String(now));
+
+    if (!lastActiveStr) return;
+    const lastActive = Number(lastActiveStr);
+    if (!lastActive || isNaN(lastActive)) return;
+
+    const elapsedSeconds = Math.floor((now - lastActive) / 1000);
+    // If less than 4 seconds elapsed, normal online loop handles it
+    if (elapsedSeconds < 4) return;
+
+    const cappedSeconds = Math.min(86400, elapsedSeconds); // Process up to 24 hours of offline activity
+
+    const autoShips = ships.filter(s =>
+      s.exists &&
+      !s.autoFishingPaused &&
+      (s.assignedCrew?.includes('golden_hunter') || s.assignedCrew?.includes('gold_fisher'))
+    );
+
+    if (autoShips.length === 0) return;
+
+    // High-speed auto-fishing takes ~0.85 seconds per complete trip (sail out, collect, return)
+    const cyclesPerShip = Math.floor(cappedSeconds / 0.85);
+    if (cyclesPerShip <= 0) return;
+
+    let totalGainedGold = 0;
+    let totalGainedExp = 0;
+    let totalFittingFish = 0;
+    const inventoryUpdates: Record<string, number> = {};
+
+    let currentTotal = getTotalFish();
+    const maxCapacity = getFishHouseCapacity(fishStorageLevel);
+
+    autoShips.forEach(ship => {
+      const shipCrew = ship.assignedCrew || [];
+      const isLuckActive = shipCrew.includes('luck');
+      const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
+      const isGuidedActive = shipCrew.includes('guide');
+      const isEngineUpgraded = ship.hasEngineUpgrade;
+      const isNetUpgraded = ship.hasNetUpgrade;
+      const crewPowerBonus = ship.crewPower || 0;
+
+      const capacityLvl = ship.capacityLevel || 1;
+      const capacityMultiplier = 1 + (capacityLvl - 1) * 0.15;
+      const cargo = Math.floor((ship.cargo || 80) * capacityMultiplier);
+      const shipFishTypes = ship.fishTypes && ship.fishTypes.length > 0
+        ? ship.fishTypes
+        : ['السردين'];
+
+      const randomFishName = isGuidedActive
+        ? shipFishTypes[shipFishTypes.length - 1]
+        : shipFishTypes[0];
+
+      const fishInfo = FISH_REWARD_DATA[randomFishName] || {
+        fullName: `${randomFishName} 🐟`,
+        valPerFish: 1,
+        emoji: '🐟'
+      };
+
+      const baseAmount = Math.max(20, Math.floor(cargo * 0.35));
+      let singleCatchAmount = (isNetUpgraded ? baseAmount * 2 : baseAmount) + crewPowerBonus;
+      if (pirateClass === 'صياد البحار') {
+        singleCatchAmount = Math.floor(singleCatchAmount * 1.15);
+      }
+      if (isLuckActive) {
+        singleCatchAmount = singleCatchAmount * 2;
+      }
+
+      let storageMultiplier = 1 + (fishStorageLevel - 1) * 0.1;
+      if (isLuckActive) storageMultiplier += 0.20;
+      if (isSailorActive) storageMultiplier += 0.15;
+
+      const totalShipFish = singleCatchAmount * cyclesPerShip;
+
+      let fittingAmount = 0;
+      let overflowAmount = totalShipFish;
+
+      if (currentTotal < maxCapacity) {
+        const remainingSpace = maxCapacity - currentTotal;
+        fittingAmount = Math.min(remainingSpace, totalShipFish);
+        overflowAmount = totalShipFish - fittingAmount;
+        currentTotal += fittingAmount;
+      }
+
+      if (fittingAmount > 0) {
+        totalFittingFish += fittingAmount;
+        inventoryUpdates[fishInfo.fullName] = (inventoryUpdates[fishInfo.fullName] || 0) + fittingAmount;
+      }
+
+      const shipGold = Math.floor(overflowAmount * fishInfo.valPerFish * storageMultiplier);
+      totalGainedGold += shipGold;
+
+      const expPerCatch = isGuidedActive ? 14 : 7;
+      totalGainedExp += expPerCatch * cyclesPerShip;
+    });
+
+    if (Object.keys(inventoryUpdates).length > 0) {
+      setFishInventory(prev => {
+        const nextInv = { ...prev };
+        Object.entries(inventoryUpdates).forEach(([name, count]) => {
+          nextInv[name] = (nextInv[name] || 0) + count;
+        });
+        localStorage.setItem('pirate_fish_inventory', JSON.stringify(nextInv));
+        return nextInv;
+      });
+    }
+
+    if (totalGainedGold > 0) {
+      setGold(prev => {
+        const nextGold = prev + totalGainedGold;
+        localStorage.setItem('pirate_gold', String(nextGold));
+        return nextGold;
+      });
+    }
+
+    if (totalGainedExp > 0) {
+      setExp(prev => {
+        const nextExp = prev + totalGainedExp;
+        localStorage.setItem('pirate_exp', String(nextExp));
+        return nextExp;
+      });
+    }
+
+    if (totalFittingFish > 0 || totalGainedGold > 0) {
+      const awayMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+      const msg = totalGainedGold > 0 && totalFittingFish === 0
+        ? `🔱 مرحباً بعودتك أيها القبطان! واصل أسطولك الصيد التلقائي أثناء غيابك (${awayMinutes} دقيقة) وتم بيع الأسماك تلقائياً لامتلاء المخزن مقابل 🪙 +${totalGainedGold.toLocaleString()} ذهب! ✨`
+        : `🔱 مرحباً بعودتك أيها القبطان! واصل أسطولك الصيد التلقائي أثناء غيابك (${awayMinutes} دقيقة) وتم جمع 🐟 +${totalFittingFish.toLocaleString()} سمكة${totalGainedGold > 0 ? ` و 🪙 +${totalGainedGold.toLocaleString()} ذهب` : ''}! ✨`;
+      showToast(msg, 'success');
+    }
+  }, [ships, fishStorageLevel, pirateClass, getTotalFish, showToast]);
+
+  // Trigger offline progress on initial load
+  const hasProcessedOfflineRef = useRef(false);
+  useEffect(() => {
+    if (!hasProcessedOfflineRef.current && ships.length > 0) {
+      hasProcessedOfflineRef.current = true;
+      processOfflineAutoHarvest();
+    }
+  }, [ships, processOfflineAutoHarvest]);
+
+  // Catch up and unfreeze ships when switching tabs or reopening window
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        processOfflineAutoHarvest();
+        // Unfreeze any ship that got throttled while tab was in background
+        setShips(prev => prev.map(s => ({ ...s, moving: false, lastMoveTime: 0 })));
+      } else {
+        localStorage.setItem('pirate_last_active_time', String(Date.now()));
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      localStorage.setItem('pirate_last_active_time', String(Date.now()));
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [processOfflineAutoHarvest]);
 
   // --- Autonomous 24/7 Fishing & Collecting Engine for Golden Hunter (الصياد الذهبي) ---
   useEffect(() => {
     const autoTimer = setInterval(() => {
-      const currentTotal = getTotalFish();
-      const maxCap = getFishHouseCapacity(fishStorageLevel);
-      const isStorageFull = currentTotal >= maxCap;
+      // Record heartbeat for offline catch-up calculation
+      localStorage.setItem('pirate_last_active_time', String(Date.now()));
 
       ships.forEach(ship => {
         if (!ship.exists) return;
@@ -4380,11 +4583,29 @@ export default function App() {
         const hasGoldenHunter = assigned.includes('golden_hunter') || assigned.includes('gold_fisher');
         
         if (hasGoldenHunter) {
-          // If ship is docked and idle at port, send it to fish automatically only if warehouse has room
-          if (ship.status === 'docked' && !ship.moving) {
-            if (!isStorageFull) {
-              startShipFishing(ship.id);
+          // Unfreeze watchdog: If a ship has been moving for over 1.2s (e.g. after refresh/tab throttle), unfreeze it!
+          if (ship.moving) {
+            const moveStarted = ship.lastMoveTime || 0;
+            if (!moveStarted || Date.now() - moveStarted > 1200) {
+              setShips(prev => prev.map(s => {
+                if (s.id === ship.id) {
+                  return {
+                    ...s,
+                    moving: false,
+                    lastMoveTime: 0,
+                    left: s.status === 'fishing' ? (fishSpots[s.id]?.l || '70%') : (docks[s.id]?.l || '45%'),
+                    top: s.status === 'fishing' ? (fishSpots[s.id]?.t || '41%') : (docks[s.id]?.t || '41%')
+                  };
+                }
+                return s;
+              }));
             }
+            return;
+          }
+
+          // If ship is docked and idle at port, send it to fish automatically (NEVER stop, even if warehouse is full!)
+          if (ship.status === 'docked' && !ship.moving) {
+            startShipFishing(ship.id, true);
           }
           // If ship is fishing and has settled at fishing spot, collect and return automatically
           else if (ship.status === 'fishing' && !ship.moving) {
@@ -4392,7 +4613,7 @@ export default function App() {
           }
         }
       });
-    }, 2000);
+    }, 150);
 
     return () => clearInterval(autoTimer);
   }, [ships, fishStorageLevel, pirateClass, fishInventory]);
@@ -7082,13 +7303,13 @@ export default function App() {
           style={(() => {
             if (portDestroyed || bgTheme === 'destroyed') {
               return { 
-                backgroundImage: `url('${destroyedPortImg}')`,
+                backgroundImage: `url('/backgrounds/destroyed_port.webp')`,
                 backgroundSize: '100% 100%',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat'
               };
             }
-            return { backgroundImage: `url(https://drive.google.com/thumbnail?id=1yxJhSwIyEV7b1X9Pe6k5Bdw_qXV6AibT&sz=w1600)`, backgroundSize: '100% 100%' };
+            return { backgroundImage: `url('/backgrounds/harbor_main.webp')`, backgroundSize: '100% 100%' };
           })()}
         >
           {/* Apocalyptic Dark Fire & Smoke Atmosphere for Destroyed Port */}
@@ -7433,7 +7654,7 @@ export default function App() {
                         filter: portDestroyed 
                           ? 'grayscale(0.9) brightness(0.18) contrast(1.5) sepia(0.6) hue-rotate(-20deg) drop-shadow(0 0 12px rgba(239,68,68,0.9))' 
                           : mapAuraFilter,
-                        transition: `left ${ship.transitionDuration || '2s'} ease-in-out, top ${ship.transitionDuration || '2s'} ease-in-out, transform 0.5s ease-in-out`,
+                        transition: `left ${ship.transitionDuration || '2s'} ease-in-out, top ${ship.transitionDuration || '2s'} ease-in-out, transform 0.25s ease-in-out`,
                         willChange: 'left, top, transform',
                         transform: `scaleX(${ship.scaleX}) ${portDestroyed ? getDestroyedShipStyles(ship.id).transform : ''} translateZ(0)`,
                         backfaceVisibility: 'hidden',
@@ -11631,8 +11852,8 @@ export default function App() {
               width: '100%',
               height: '100%',
               backgroundImage: inspectedPlayer.portDestroyed 
-                ? "url('https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/IMG-20260723-WA0002(1).jpg')" 
-                : 'url(https://drive.google.com/thumbnail?id=1yxJhSwIyEV7b1X9Pe6k5Bdw_qXV6AibT&sz=w1600)',
+                ? "url('/backgrounds/destroyed_port.webp')" 
+                : "url('/backgrounds/harbor_main.webp')",
               backgroundSize: '100% 100%',
               backgroundPosition: 'center bottom',
               backgroundRepeat: 'no-repeat',

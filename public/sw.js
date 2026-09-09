@@ -1,10 +1,17 @@
-const CACHE_NAME = 'kings-of-the-deep-v6';
+const CACHE_NAME = 'kings-of-the-deep-v7';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/backgrounds/harbor_main.webp',
+  '/backgrounds/destroyed_port.webp',
+  '/backgrounds/ship_bg.webp',
+  '/ships/ship_00.webp',
+  '/ships/ship_01.webp',
+  '/icons/res/gold-coin.webp',
+  '/icons/res/gem.webp'
 ];
 
 // Install Service Worker and cache essential assets
