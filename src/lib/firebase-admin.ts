@@ -1,16 +1,55 @@
-import { initializeApp, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, getApps, App } from 'firebase-admin/app';
+import { getAuth, Auth } from 'firebase-admin/auth';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
-// Explicitly hardcoded Firebase Admin configuration strictly for project 'kingofdeep'
 export const firebaseAdminConfig = {
-  projectId: 'kingofdeep',
+  projectId: process.env.FIREBASE_PROJECT_ID || 'kingofdeep',
 };
 
-if (!getApps().length) {
-  initializeApp(firebaseAdminConfig);
+let adminAppInstance: App | null = null;
+let adminAuthInstance: Auth | null = null;
+let adminDbInstance: Firestore | null = null;
+
+export function getAdminApp(): App {
+  if (!adminAppInstance) {
+    const apps = getApps();
+    if (apps.length > 0) {
+      adminAppInstance = apps[0];
+    } else {
+      adminAppInstance = initializeApp(firebaseAdminConfig);
+    }
+  }
+  return adminAppInstance;
 }
 
-export const adminAuth = getAuth();
-export const adminDb = getFirestore();
+export function getAdminAuth(): Auth {
+  if (!adminAuthInstance) {
+    adminAuthInstance = getAuth(getAdminApp());
+  }
+  return adminAuthInstance;
+}
+
+export function getAdminDb(): Firestore {
+  if (!adminDbInstance) {
+    adminDbInstance = getFirestore(getAdminApp());
+  }
+  return adminDbInstance;
+}
+
+export const adminAuth = new Proxy({} as Auth, {
+  get(_target, prop) {
+    const instance = getAdminAuth();
+    const value = (instance as any)[prop];
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+});
+
+export const adminDb = new Proxy({} as Firestore, {
+  get(_target, prop) {
+    const instance = getAdminDb();
+    const value = (instance as any)[prop];
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+});
+
 

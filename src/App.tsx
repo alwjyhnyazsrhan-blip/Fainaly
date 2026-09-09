@@ -174,6 +174,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     return localStorage.getItem('pirate_is_logged_in') === 'true';
   });
+  const [currentUser, setCurrentUser] = useState<any>(() => auth.currentUser);
 
   if (isTunnel) {
     return <GoogleLoginTunnelHelper />;
@@ -2915,6 +2916,7 @@ export default function App() {
     }, 200);
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
       if (user) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
@@ -3138,6 +3140,7 @@ export default function App() {
         }
       } else {
         // User not logged into Firebase: do NOT wipe localStorage so local progress is preserved!
+        setCurrentUser(null);
         setIsLoggedIn(false);
         isLoadedFromFirebase.current = false;
         clearTimeout(quickTimer);
@@ -3392,12 +3395,12 @@ export default function App() {
 
   // --- Live Firestore Chat Subscription ---
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || !currentUser) return;
     // Querying with limit avoids missing index or missing field errors on old chat entries
     const q = query(collection(db, 'chats'), limit(100));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const msgs: ChatMessage[] = [];
-      const currentUid = auth.currentUser?.uid || localStorage.getItem('pirate_local_uid') || '';
+      const currentUid = currentUser.uid || localStorage.getItem('pirate_local_uid') || '';
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         msgs.push({
@@ -3422,10 +3425,10 @@ export default function App() {
 
       setChatMessages(msgs);
     }, (err) => {
-      console.error("Error fetching chats from Firestore:", err);
+      console.warn("Could not fetch chats from Firestore:", err.message || err);
     });
     return () => unsubscribe();
-  }, [isLoggedIn, username]);
+  }, [isLoggedIn, currentUser, username]);
 
   // --- Auto-scroll Chat to bottom when new messages arrive or when chat tab opens ---
   useEffect(() => {
@@ -3440,8 +3443,9 @@ export default function App() {
 
   // --- Live Tribes Subscription ---
   useEffect(() => {
-    if (!isLoggedIn) return;
-    const q = query(collection(db, 'tribes'), orderBy('power', 'desc'));
+    if (!isLoggedIn || !currentUser) return;
+    // Querying with limit and sorting in-memory avoids missing-field exclusion and index requirements
+    const q = query(collection(db, 'tribes'), limit(50));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const list: any[] = [];
       snapshot.forEach((docSnap) => {
@@ -3461,16 +3465,18 @@ export default function App() {
           createdAt: data.createdAt || new Date().toISOString()
         });
       });
+      // Sort in-memory by power descending
+      list.sort((a, b) => (b.power || 0) - (a.power || 0));
       setTribes(list);
     }, (err) => {
-      console.error("Error fetching tribes from Firestore:", err);
+      console.warn("Could not fetch tribes from Firestore:", err.message || err);
     });
     return () => unsubscribe();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, currentUser]);
 
   // --- Live Players & Leaderboard Subscription ---
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || !currentUser) return;
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const playerList: any[] = [];
@@ -3525,13 +3531,14 @@ export default function App() {
 
       setRealPlayers(deduplicatedList);
     }, (err) => {
-      console.error("Error listening to user profiles for leaderboard:", err);
+      console.warn("Could not listen to user profiles for leaderboard:", err.message || err);
     });
     return () => unsubscribe();
-  }, [isLoggedIn]);
+  }, [isLoggedIn, currentUser]);
 
   // --- Live Firestore Global Notifications Listener ---
   useEffect(() => {
+    if (!isLoggedIn || !currentUser) return;
     const mountTime = Date.now() - 4000;
     const qNotifs = query(
       collection(db, 'globalNotifications'),
@@ -3558,7 +3565,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [isLoggedIn, currentUser]);
 
   // --- Automated Milestone Tracker for Player Level & Facility Upgrades ---
   const prevPlayerLevel = useRef<number>(playerLevel);
@@ -3606,9 +3613,7 @@ export default function App() {
 
   // --- Live Firestore Harbor Events & Defender Defense Engine ---
   useEffect(() => {
-    if (!isLoggedIn) return;
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+    if (!isLoggedIn || !currentUser) return;
 
     const qEvents = query(
       collection(db, 'harborEvents'),
@@ -3768,17 +3773,15 @@ export default function App() {
         }
       }
     }, (err) => {
-      console.error("Error subscribing to harborEvents:", err);
+      console.warn("Could not subscribe to harborEvents:", err.message || err);
     });
 
     return () => unsubscribe();
-  }, [isLoggedIn, battleReports]);
+  }, [isLoggedIn, currentUser, battleReports]);
 
   // --- Live Firestore Friend Requests Subscription ---
   useEffect(() => {
-    if (!isLoggedIn) return;
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+    if (!isLoggedIn || !currentUser) return;
 
     // 1. Listen to incoming pending requests
     const qIncoming = query(
@@ -3794,7 +3797,7 @@ export default function App() {
       });
       setFriendRequests(list);
     }, (err) => {
-      console.error("Error subscribing to incoming friend requests:", err);
+      console.warn("Could not subscribe to incoming friend requests:", err.message || err);
     });
 
     // 2. Listen to outgoing requests accepted by target players
@@ -3814,21 +3817,21 @@ export default function App() {
           try {
             await updateDoc(doc(db, 'users', currentUser.uid), { friends: updated });
           } catch (e) {
-            console.error("Error updating accepted friends locally:", e);
+            console.warn("Could not update accepted friends locally:", e);
           }
         }
         // Remove processed accepted request
-        deleteDoc(doc(db, 'friendRequests', d.id)).catch(console.error);
+        deleteDoc(doc(db, 'friendRequests', d.id)).catch(() => {});
       }
     }, (err) => {
-      console.error("Error subscribing to accepted friend requests:", err);
+      console.warn("Could not subscribe to accepted friend requests:", err.message || err);
     });
 
     return () => {
       unsubIncoming();
       unsubAccepted();
     };
-  }, [isLoggedIn, friends]);
+  }, [isLoggedIn, currentUser, friends]);
 
   // --- Synchronize Inspected Player State in Real-Time ---
   useEffect(() => {
