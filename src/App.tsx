@@ -13,7 +13,6 @@ import CrewTavernModal from './components/CrewTavernModal';
 import ParticlesEffect from './components/ParticlesEffect';
 import { InGameNotificationBanner } from './components/InGameNotificationBanner';
 import { playNotificationSound } from './utils/notificationSound';
-import { motion } from 'motion/react';
 
 import ShipImage from './components/ShipImage';
 import ShipCrewMember, { CREW_VISUAL_MAP, sanitizeShipCrew } from './components/ShipCrewMember';
@@ -2080,7 +2079,7 @@ export default function App() {
   const shipMenuRef = useRef<HTMLDivElement>(null);
   const [rewardModal, setRewardModal] = useState(false);
   const [questsExpanded, setQuestsExpanded] = useState(true);
-  const [rewardFish, setRewardFish] = useState({ name: 'أنشوجة', amount: 80, value: 120 });
+  const [rewardFish, setRewardFish] = useState<{ name: string; amount: number; value: number; luckDoubled?: boolean; guided?: boolean }>({ name: 'أنشوجة', amount: 80, value: 120 });
   const [crewModal, setCrewModal] = useState(false);
   const [crewTab, setCrewTab] = useState<'sailors' | 'special'>('sailors');
   const [activeReport, setActiveReport] = useState<BattleReport | null>(null);
@@ -3638,10 +3637,10 @@ export default function App() {
               setShips(prevShips => {
                 const updated = prevShips.map(s => {
                   if (!targetShipId || s.id === targetShipId || ev.type === 'ATOMIC_BOMB' || ev.type === 'AD_BOMB') {
-                    const maxH = s.maxHeart || (s.level * 1000) + 10000;
+                    const maxH = s.maxHeart || ((s.level || 1) * 1000) + 10000;
                     const curH = typeof s.heart === 'number' ? s.heart : maxH;
                     const newH = Math.max(0, curH - damage);
-                    return { ...s, heart: newH, ...(newH <= 0 ? { moving: false, status: 'docked' } : {}) };
+                    return { ...s, heart: newH, ...(newH <= 0 ? { moving: false, status: 'docked' as const } : {}) };
                   }
                   return s;
                 });
@@ -3706,7 +3705,7 @@ export default function App() {
               const helperName = ev.attackerName || 'صديق';
               setShips(prevShips => {
                 const updated = prevShips.map(s => {
-                  const maxH = s.maxHeart || (s.level * 1000) + 10000;
+                  const maxH = s.maxHeart || ((s.level || 1) * 1000) + 10000;
                   const curH = typeof s.heart === 'number' ? s.heart : maxH;
                   const newH = Math.min(maxH, curH + healAmount);
                   return { ...s, heart: newH };
@@ -4344,38 +4343,17 @@ export default function App() {
           storageMultiplier += 0.15; 
         }
 
-        const currentTotalFish = getTotalFish() as number;
-        const maxCapacity = getFishHouseCapacity(fishStorageLevel);
-        let finalTotalAmount = totalAmount as number;
-        let overflowAmount = 0;
-        if (currentTotalFish + (totalAmount as number) > maxCapacity) {
-          finalTotalAmount = Math.max(0, maxCapacity - currentTotalFish);
-          overflowAmount = Math.max(0, (totalAmount as number) - finalTotalAmount);
-        }
-
-        const normalGoldReward = Math.floor(finalTotalAmount * fishInfo.valPerFish * storageMultiplier);
-        // Excess fish caught beyond warehouse capacity are automatically converted into gold so collection NEVER stops!
-        const overflowGoldReward = Math.floor(overflowAmount * fishInfo.valPerFish * storageMultiplier);
-        const goldReward = normalGoldReward + overflowGoldReward;
-
-        if (overflowGoldReward > 0) {
-          setGold(prev => {
-            const nextGold = prev + overflowGoldReward;
-            localStorage.setItem('pirate_gold', String(nextGold));
-            return nextGold;
-          });
-        }
-        
         let expReward = Math.floor(5 + Math.random() * 5);
         if (isGuidedActive) {
           expReward = expReward * 2;
         }
 
-        if (finalTotalAmount > 0) {
+        // Add all caught fish directly to fish inventory without any automatic selling
+        if (totalAmount > 0) {
           setFishInventory(prev => {
             const nextInv = {
               ...prev,
-              [fishInfo.fullName]: ((prev[fishInfo.fullName] as number) || 0) + (finalTotalAmount as number)
+              [fishInfo.fullName]: ((prev[fishInfo.fullName] as number) || 0) + (totalAmount as number)
             };
             localStorage.setItem('pirate_fish_inventory', JSON.stringify(nextInv));
             return nextInv;
@@ -4387,8 +4365,8 @@ export default function App() {
         if (!isAuto) {
           setRewardFish({
             name: fishInfo.fullName,
-            amount: finalTotalAmount > 0 ? finalTotalAmount : totalAmount,
-            value: goldReward,
+            amount: totalAmount,
+            value: 0,
             luckDoubled: isLuckActive,
             guided: isGuidedActive,
           });
@@ -4475,23 +4453,10 @@ export default function App() {
 
       const totalShipFish = singleCatchAmount * cyclesPerShip;
 
-      let fittingAmount = 0;
-      let overflowAmount = totalShipFish;
-
-      if (currentTotal < maxCapacity) {
-        const remainingSpace = maxCapacity - currentTotal;
-        fittingAmount = Math.min(remainingSpace, totalShipFish);
-        overflowAmount = totalShipFish - fittingAmount;
-        currentTotal += fittingAmount;
+      if (totalShipFish > 0) {
+        totalFittingFish += totalShipFish;
+        inventoryUpdates[fishInfo.fullName] = (inventoryUpdates[fishInfo.fullName] || 0) + totalShipFish;
       }
-
-      if (fittingAmount > 0) {
-        totalFittingFish += fittingAmount;
-        inventoryUpdates[fishInfo.fullName] = (inventoryUpdates[fishInfo.fullName] || 0) + fittingAmount;
-      }
-
-      const shipGold = Math.floor(overflowAmount * fishInfo.valPerFish * storageMultiplier);
-      totalGainedGold += shipGold;
 
       const expPerCatch = isGuidedActive ? 14 : 7;
       totalGainedExp += expPerCatch * cyclesPerShip;
@@ -4508,14 +4473,6 @@ export default function App() {
       });
     }
 
-    if (totalGainedGold > 0) {
-      setGold(prev => {
-        const nextGold = prev + totalGainedGold;
-        localStorage.setItem('pirate_gold', String(nextGold));
-        return nextGold;
-      });
-    }
-
     if (totalGainedExp > 0) {
       setExp(prev => {
         const nextExp = prev + totalGainedExp;
@@ -4524,11 +4481,9 @@ export default function App() {
       });
     }
 
-    if (totalFittingFish > 0 || totalGainedGold > 0) {
+    if (totalFittingFish > 0) {
       const awayMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
-      const msg = totalGainedGold > 0 && totalFittingFish === 0
-        ? `🔱 مرحباً بعودتك أيها القبطان! واصل أسطولك الصيد التلقائي أثناء غيابك (${awayMinutes} دقيقة) وتم بيع الأسماك تلقائياً لامتلاء المخزن مقابل 🪙 +${totalGainedGold.toLocaleString()} ذهب! ✨`
-        : `🔱 مرحباً بعودتك أيها القبطان! واصل أسطولك الصيد التلقائي أثناء غيابك (${awayMinutes} دقيقة) وتم جمع 🐟 +${totalFittingFish.toLocaleString()} سمكة${totalGainedGold > 0 ? ` و 🪙 +${totalGainedGold.toLocaleString()} ذهب` : ''}! ✨`;
+      const msg = `🔱 مرحباً بعودتك أيها القبطان! واصل أسطولك الصيد التلقائي أثناء غيابك (${awayMinutes} دقيقة) وتم جمع 🐟 +${totalFittingFish.toLocaleString()} سمكة وحفظها في بيت السمك لبيعها لاحقاً! ✨`;
       showToast(msg, 'success');
     }
   }, [ships, fishStorageLevel, pirateClass, getTotalFish, showToast]);

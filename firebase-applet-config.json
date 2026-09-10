@@ -1,11 +1,12 @@
 {
   "projectId": "kingofdeep",
-  "appId": "1:865058774465:web:083d2a7ee22f2d61b92340",
+  "appId": "1:865058774465:web:ef1a6855e883886ab92340",
   "apiKey": "AIzaSyANi1hKBMLRQk2keakcLjLv9PsQAxJTQN8",
   "authDomain": "kingofdeep.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "firestoreDatabaseId": "ai-studio-fainaly-d3f4d71f-d0f5-4788-95ce-5e5256460f5b",
   "storageBucket": "kingofdeep.firebasestorage.app",
   "messagingSenderId": "865058774465",
-  "measurementId": "G-41F5PSQ7LR",
+  "measurementId": "G-MSXXJSVC15",
+  "oAuthClientId": "865058774465-fbvrfq3nl7clfbm6m64mt576gh26cocv.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

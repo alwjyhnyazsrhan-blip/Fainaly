@@ -13,22 +13,10 @@ export default defineConfig(() => {
     },
     build: {
       target: 'esnext',
-      minify: 'esbuild',
+      minify: 'esbuild' as const,
       cssCodeSplit: true,
       sourcemap: false,
-      chunkSizeWarningLimit: 1600,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('firebase')) return 'firebase';
-              if (id.includes('lucide-react')) return 'icons';
-              if (id.includes('react')) return 'vendor';
-              return 'deps';
-            }
-          },
-        },
-      },
+      chunkSizeWarningLimit: 2500,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

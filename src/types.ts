@@ -14,6 +14,7 @@ export interface ShipState {
   hook?: number;
   cargo?: number;
   heart?: number;
+  maxHeart?: number;
   durationStr?: string;
   power?: number;
   armor?: number;

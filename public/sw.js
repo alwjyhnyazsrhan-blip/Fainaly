@@ -1,7 +1,5 @@
-const CACHE_NAME = 'kings-of-the-deep-v7';
+const CACHE_NAME = 'kings-of-the-deep-v8';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -14,8 +12,9 @@ const ASSETS_TO_CACHE = [
   '/icons/res/gem.webp'
 ];
 
-// Install Service Worker and cache essential assets
+// Install Service Worker and cache essential media assets only
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       const cachePromises = ASSETS_TO_CACHE.map((asset) => {
@@ -24,23 +23,36 @@ self.addEventListener('install', (event) => {
         });
       });
       return Promise.all(cachePromises);
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
-// Activate and clean old caches
+// Activate, purge any previous caches, and claim clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
+            console.log('[SW] Purging old cache:', cache);
             return caches.delete(cache);
           }
         })
       );
     }).then(() => self.clients.claim())
   );
+});
+
+// Message listener to skip waiting or purge all caches on request
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'CLEAR_ALL_CACHES') {
+    caches.keys().then((names) => {
+      return Promise.all(names.map((name) => caches.delete(name)));
+    });
+  }
 });
 
 // Helper to determine if request is for image or game media asset
@@ -52,7 +64,7 @@ function isMediaOrImageRequest(url) {
   );
 }
 
-// Robust fetch strategy
+// Fetch strategy
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -62,13 +74,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip video range requests
+  // Skip video requests
   if (url.endsWith('.mp4') || url.includes('/background_video.mp4')) {
     return;
   }
 
-  // Skip dynamic API, Firebase, Google Authentication, and dev server requests
+  // Never intercept scripts, modules, vite internals, or APIs
+  // Always let the browser and Vite handle code directly
   if (
+    event.request.destination === 'script' ||
+    url.includes('/src/') ||
+    url.includes('/node_modules/') ||
+    url.includes('/@vite') ||
+    url.includes('/@fs') ||
+    url.includes('/@id') ||
+    url.includes('/api/') ||
     url.includes('firestore.googleapis.com') || 
     url.includes('identitytoolkit.googleapis.com') ||
     url.includes('securetoken.googleapis.com') ||
@@ -76,20 +96,15 @@ self.addEventListener('fetch', (event) => {
     url.includes('firebaseapp.com') ||
     url.includes('google.com') ||
     url.includes('gstatic.com') ||
-    url.includes('/api/') ||
-    url.includes('/@vite') ||
-    url.includes('/@fs') ||
-    url.includes('/@id') ||
-    url.includes('/src/') ||
     url.includes('chrome-extension')
   ) {
     return;
   }
 
-  // 1. Navigation requests
+  // 1. Navigation requests: Network-First with fallback to cache only if offline
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-cache' })
         .then((response) => {
           if (response && response.status === 200) {
             const responseToCache = response.clone();
@@ -99,14 +114,16 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => {
-          return caches.match('/index.html') || caches.match('/');
+        .catch(async () => {
+          const cached = await caches.match(event.request) || await caches.match('/index.html') || await caches.match('/');
+          if (cached) return cached;
+          return new Response('Network unavailable', { status: 503, statusText: 'Offline' });
         })
     );
     return;
   }
 
-  // 2. Images, GitHub raw assets, and media (Cache-First + Background Revalidate)
+  // 2. Images and media assets (Cache-First + Background Revalidate)
   if (isMediaOrImageRequest(url)) {
     event.respondWith(
       caches.match(event.request, { ignoreSearch: false }).then((cachedResponse) => {
@@ -122,16 +139,14 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => cachedResponse);
 
-        // Serve cached version immediately if available!
         return cachedResponse || fetchPromise;
       })
     );
     return;
   }
 
-  // 3. Standard shell asset requests
+  // 3. Pre-cached shell image assets
   const isShellAsset = ASSETS_TO_CACHE.some(asset => url.endsWith(asset) || url.includes(asset));
-
   if (isShellAsset) {
     event.respondWith(
       caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
@@ -149,31 +164,6 @@ self.addEventListener('fetch', (event) => {
         });
       })
     );
-  } else {
-    // Only intercept same-origin static requests
-    if (!url.startsWith(self.location.origin)) {
-      return;
-    }
-    // Network-First with Cache Fallback for same-origin assets
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          if (response && (response.status === 200 || response.type === 'opaque' || response.type === 'cors')) {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match(event.request, { ignoreSearch: true });
-          if (cached) {
-            return cached;
-          }
-          // Prevent undefined response which triggers "Script error." in browsers
-          return new Response('Network unavailable', { status: 503, statusText: 'Service Unavailable' });
-        })
-    );
   }
 });
+

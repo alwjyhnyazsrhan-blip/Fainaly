@@ -65,6 +65,40 @@
       }
     </style>
     <script>
+      window.__appLoaded = false;
+
+      // Global function to purge all service workers, storage, caches and force reload
+      window.clearCacheAndReload = function() {
+        console.log('[RELOAD] Clearing caches and service workers...');
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) { r.unregister(); });
+            });
+          }
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              names.forEach(function(name) { caches.delete(name); });
+            });
+          }
+          sessionStorage.clear();
+        } catch(err) {
+          console.warn('Error clearing caches:', err);
+        }
+        setTimeout(function() {
+          window.location.reload(true);
+        }, 150);
+      };
+
+      // Catch unhandled errors for debugging in console
+      window.addEventListener('error', function(e) {
+        console.error('[CRITICAL APPLICATION ERROR]', e);
+      });
+
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('[UNHANDLED PROMISE REJECTION]', e.reason);
+      });
+
       // Prevent pinch-to-zoom on touchscreens
       document.addEventListener('touchmove', function (event) {
         if (event.touches.length > 1) {
@@ -77,11 +111,24 @@
       document.addEventListener('gesturechange', function (event) { event.preventDefault(); });
       document.addEventListener('gestureend', function (event) { event.preventDefault(); });
 
-      // Register PWA Service Worker
+      // Register PWA Service Worker with auto-update
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('PWA Service Worker registered!', reg))
+            .then(reg => {
+              console.log('PWA Service Worker registered!', reg);
+              // Check for SW updates
+              reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                if (installingWorker) {
+                  installingWorker.onstatechange = () => {
+                    if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                      console.log('New content is available; please refresh.');
+                    }
+                  };
+                }
+              };
+            })
             .catch(err => console.error('PWA Service Worker registration failed!', err));
         });
       }
@@ -89,10 +136,10 @@
   </head>
   <body>
     <div id="root">
-      <div class="initial-loader">
-        <div style="font-size: 36px; animation: bounce 1.5s infinite;">⚓</div>
+      <div class="initial-loader" id="initial-loader-wrapper">
+        <div style="font-size: 40px; animation: bounce 1.5s infinite; filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.5));">⚓</div>
         <div class="initial-spinner"></div>
-        <div style="font-size: 16px; color: #38bdf8; font-weight: bold; margin-top: 8px;">جاري تحميل لعبة ملوك الأعماق...</div>
+        <div id="initial-loader-msg" style="font-size: 17px; color: #38bdf8; font-weight: bold; margin-top: 8px; text-shadow: 0 0 8px rgba(56, 189, 248, 0.4);">جاري تحميل لعبة ملوك الأعماق...</div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
