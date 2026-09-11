@@ -13,6 +13,17 @@ import CrewTavernModal from './components/CrewTavernModal';
 import ParticlesEffect from './components/ParticlesEffect';
 import { InGameNotificationBanner } from './components/InGameNotificationBanner';
 import { playNotificationSound } from './utils/notificationSound';
+import { LargeRocketExplosion } from './components/LargeRocketExplosion';
+import { SmallRocketExplosion } from './components/SmallRocketExplosion';
+import { AtomicBombExplosion } from './components/AtomicBombExplosion';
+import { 
+  playLargeRocketIncomingSound, 
+  playLargeRocketExplosionSound,
+  playSmallRocketIncomingSound,
+  playSmallRocketExplosionSound,
+  playAtomicBombDropSound,
+  playAtomicBombExplosionSound
+} from './utils/explosionSound';
 
 import ShipImage from './components/ShipImage';
 import ShipCrewMember, { CREW_VISUAL_MAP, sanitizeShipCrew } from './components/ShipCrewMember';
@@ -782,6 +793,7 @@ export default function App() {
   const [showWeaponSelector, setShowWeaponSelector] = useState<boolean>(false);
   const [isAtomicBombActive, setIsAtomicBombActive] = useState<boolean>(false);
   const [showAtomicExplosion, setShowAtomicExplosion] = useState<boolean>(false);
+  const [showAtomicBombXp, setShowAtomicBombXp] = useState<boolean>(false);
   const [showLootSelector, setShowLootSelector] = useState<boolean>(false);
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [gainedXpAnim, setGainedXpAnim] = useState<boolean>(false);
@@ -793,6 +805,11 @@ export default function App() {
   const [globalMessageText, setGlobalMessageText] = useState<string>('');
   const [isLargeRocketActive, setIsLargeRocketActive] = useState<boolean>(false);
   const [showLargeRocketExplosion, setShowLargeRocketExplosion] = useState<boolean>(false);
+  const [isSmallRocketActive, setIsSmallRocketActive] = useState<boolean>(false);
+  const [showSmallRocketExplosion, setShowSmallRocketExplosion] = useState<boolean>(false);
+  const [rocketTargetPos, setRocketTargetPos] = useState<{ l: string; t: string }>({ l: '45%', t: '49%' });
+  const [showRocketXp, setShowRocketXp] = useState<boolean>(false);
+  const [rocketXpText, setRocketXpText] = useState<string>('XP +100');
   const [showSmokeExplosion, setShowSmokeExplosion] = useState<boolean>(false);
   const [showAdSelectorModal, setShowAdSelectorModal] = useState<boolean>(false);
   const [showLegendaryRepairSparkles, setShowLegendaryRepairSparkles] = useState<boolean>(false);
@@ -898,195 +915,10 @@ export default function App() {
   };
 
   const playNuclearExplosionSound = () => {
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-
-      // Ensure AudioContext is resumed (handling browser autoplay restrictions)
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      const now = ctx.currentTime;
-
-      // --- PHASE 0: Pre-strike Warning Siren (0.0s to 1.8s) ---
-      // Immersive air raid sirens sweeping in pitch to build massive tension
-      const sirenOsc1 = ctx.createOscillator();
-      const sirenOsc2 = ctx.createOscillator();
-      const sirenGain = ctx.createGain();
-
-      sirenOsc1.type = 'sine';
-      sirenOsc2.type = 'triangle';
-
-      sirenOsc1.frequency.setValueAtTime(500, now);
-      sirenOsc1.frequency.linearRampToValueAtTime(700, now + 0.4);
-      sirenOsc1.frequency.linearRampToValueAtTime(500, now + 0.8);
-      sirenOsc1.frequency.linearRampToValueAtTime(700, now + 1.2);
-      sirenOsc1.frequency.linearRampToValueAtTime(400, now + 1.8);
-
-      sirenOsc2.frequency.setValueAtTime(505, now);
-      sirenOsc2.frequency.linearRampToValueAtTime(705, now + 0.4);
-      sirenOsc2.frequency.linearRampToValueAtTime(505, now + 0.8);
-      sirenOsc2.frequency.linearRampToValueAtTime(705, now + 1.2);
-      sirenOsc2.frequency.linearRampToValueAtTime(405, now + 1.8);
-
-      sirenGain.gain.setValueAtTime(0.05, now);
-      sirenGain.gain.linearRampToValueAtTime(0.08, now + 0.4);
-      sirenGain.gain.linearRampToValueAtTime(0.05, now + 1.2);
-      sirenGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-
-      sirenOsc1.connect(sirenGain);
-      sirenOsc2.connect(sirenGain);
-      sirenGain.connect(ctx.destination);
-
-      sirenOsc1.start(now);
-      sirenOsc2.start(now);
-      sirenOsc1.stop(now + 1.8);
-      sirenOsc2.stop(now + 1.8);
-
-      // --- PHASE 1: Bomb Falling Whistle (0.0s to 1.8s) ---
-      // A screaming, high-velocity falling bomb whistle that descends exponentially
-      const whistleOsc = ctx.createOscillator();
-      const whistleGain = ctx.createGain();
-      const whistleFilter = ctx.createBiquadFilter();
-
-      whistleOsc.type = 'sawtooth';
-      whistleOsc.frequency.setValueAtTime(1100, now);
-      whistleOsc.frequency.exponentialRampToValueAtTime(140, now + 1.8);
-
-      whistleFilter.type = 'lowpass';
-      whistleFilter.frequency.setValueAtTime(1400, now);
-      whistleFilter.frequency.exponentialRampToValueAtTime(350, now + 1.8);
-
-      whistleGain.gain.setValueAtTime(0.005, now);
-      whistleGain.gain.exponentialRampToValueAtTime(0.14, now + 1.6);
-      whistleGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-
-      whistleOsc.connect(whistleFilter);
-      whistleFilter.connect(whistleGain);
-      whistleGain.connect(ctx.destination);
-
-      whistleOsc.start(now);
-      whistleOsc.stop(now + 1.8);
-
-      // --- PHASE 2: Ultimate Detonation (Triggered at 1.8s) ---
-      setTimeout(() => {
-        const detTime = ctx.currentTime;
-
-        // 2.1 Low-Frequency Brownian Noise (Boiling fireball and massive air rumble)
-        const bufferSize = ctx.sampleRate * 4.5;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        let lastOut = 0.0;
-        for (let i = 0; i < bufferSize; i++) {
-          const white = Math.random() * 2 - 1;
-          // Brownian noise filter (brown noise creates a warm, thick, cinematic rumbling roar)
-          data[i] = (lastOut + (0.02 * white)) / 1.02;
-          lastOut = data[i];
-          data[i] *= 4.0; // Boost raw signal strength
-        }
-
-        const noiseSource = ctx.createBufferSource();
-        noiseSource.buffer = buffer;
-
-        const lowpass = ctx.createBiquadFilter();
-        lowpass.type = 'lowpass';
-        lowpass.frequency.setValueAtTime(2200, detTime); // Crisp high-frequency initial blast crack
-        lowpass.frequency.exponentialRampToValueAtTime(35, detTime + 3.8); // Deep, heavy ground roar
-        lowpass.Q.setValueAtTime(5, detTime);
-
-        const noiseGain = ctx.createGain();
-        noiseGain.gain.setValueAtTime(2.2, detTime); // Instant shockwave peak loudness
-        noiseGain.gain.exponentialRampToValueAtTime(1.1, detTime + 0.4); // Persistent rolling blast
-        noiseGain.gain.linearRampToValueAtTime(0.001, detTime + 4.2); // Smooth fadeout into fallout
-
-        noiseSource.connect(lowpass);
-        lowpass.connect(noiseGain);
-        noiseGain.connect(ctx.destination);
-
-        noiseSource.start(detTime);
-        noiseSource.stop(detTime + 4.5);
-
-        // 2.2 Sharp Shockwave Transient (Instant "Crack" at millisecond of impact)
-        const transientOsc = ctx.createOscillator();
-        const transientGain = ctx.createGain();
-        const transientFilter = ctx.createBiquadFilter();
-
-        transientOsc.type = 'triangle';
-        transientOsc.frequency.setValueAtTime(70, detTime);
-        transientOsc.frequency.exponentialRampToValueAtTime(25, detTime + 0.18);
-
-        transientFilter.type = 'bandpass';
-        transientFilter.frequency.setValueAtTime(130, detTime);
-
-        transientGain.gain.setValueAtTime(1.8, detTime);
-        transientGain.gain.exponentialRampToValueAtTime(0.001, detTime + 0.22);
-
-        transientOsc.connect(transientFilter);
-        transientFilter.connect(transientGain);
-        transientGain.connect(ctx.destination);
-
-        transientOsc.start(detTime);
-        transientOsc.stop(detTime + 0.22);
-
-        // 2.3 Sub-Bass Earthquake / Infra-Bass rumble (Vibrating headphones and subwoofers)
-        const subOsc1 = ctx.createOscillator();
-        const subOsc2 = ctx.createOscillator();
-        const subGain = ctx.createGain();
-
-        subOsc1.type = 'sine';
-        subOsc1.frequency.setValueAtTime(32, detTime); // 32Hz deep rumble
-        subOsc1.frequency.linearRampToValueAtTime(18, detTime + 4.0);
-
-        subOsc2.type = 'triangle';
-        subOsc2.frequency.setValueAtTime(42, detTime); // 42Hz dirt resonance
-        subOsc2.frequency.linearRampToValueAtTime(22, detTime + 4.0);
-
-        subGain.gain.setValueAtTime(1.6, detTime);
-        subGain.gain.exponentialRampToValueAtTime(0.7, detTime + 1.8);
-        subGain.gain.linearRampToValueAtTime(0.001, detTime + 4.2);
-
-        subOsc1.connect(subGain);
-        subOsc2.connect(subGain);
-        subGain.connect(ctx.destination);
-
-        subOsc1.start(detTime);
-        subOsc2.start(detTime);
-        subOsc1.stop(detTime + 4.2);
-        subOsc2.stop(detTime + 4.2);
-
-        // 2.4 Crackling Fire debris & fallout wind
-        const crackleBuffer = ctx.createBuffer(1, ctx.sampleRate * 3.5, ctx.sampleRate);
-        const crackleData = crackleBuffer.getChannelData(0);
-        for (let i = 0; i < crackleBuffer.length; i++) {
-          // Sparse clicks simulate sparking, sizzling metal and debris landing in water
-          crackleData[i] = Math.random() < 0.022 ? (Math.random() * 2 - 1) : 0;
-        }
-        const crackleSource = ctx.createBufferSource();
-        crackleSource.buffer = crackleBuffer;
-
-        const crackleFilter = ctx.createBiquadFilter();
-        crackleFilter.type = 'highpass';
-        crackleFilter.frequency.setValueAtTime(2800, detTime);
-
-        const crackleGain = ctx.createGain();
-        crackleGain.gain.setValueAtTime(0.0, detTime);
-        crackleGain.gain.linearRampToValueAtTime(0.35, detTime + 0.3); // Gradually fade-in debris sizzle
-        crackleGain.gain.exponentialRampToValueAtTime(0.001, detTime + 3.2);
-
-        crackleSource.connect(crackleFilter);
-        crackleFilter.connect(crackleGain);
-        crackleGain.connect(ctx.destination);
-
-        crackleSource.start(detTime + 0.15);
-        crackleSource.stop(detTime + 3.5);
-
-      }, 1800);
-    } catch (error) {
-      console.error("Advanced Web Audio API synthesis failed", error);
-    }
+    playAtomicBombDropSound();
+    setTimeout(() => {
+      playAtomicBombExplosionSound();
+    }, 1180);
   };
 
   const playLuffyAdSound = () => {
@@ -1375,91 +1207,152 @@ export default function App() {
     }
   };
 
-  const handleLaunchSmallRocket = () => {
+  const handleLaunchSmallRocket = (targetShipOverride?: any) => {
     if (!inspectedPlayer) return;
     
+    // Ensure all menus are closed so the battlefield is completely unobstructed
+    setSelectedVisitedShip(null);
+    setShowWeaponSelector(false);
+
+    // Determine the targeted ship and calculate its exact screen coordinates
+    const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
+      ? inspectedPlayer.ships
+      : getInspectedPlayerShips(inspectedPlayer);
+    const targetShip = targetShipOverride || selectedVisitedShip || baseShips[0];
+
+    let targetLeft = '45%';
+    let targetTop = '49%';
+    if (targetShip) {
+      if (targetShip.left && targetShip.top) {
+        targetLeft = targetShip.left;
+        targetTop = targetShip.top;
+      } else {
+        const idx = baseShips.findIndex((s: any) => s.id === targetShip.id);
+        const dockKey = `s${targetShip.id || (idx >= 0 ? idx + 1 : 1)}`;
+        const fallbackPos = docks[dockKey] || docks[`s${(idx >= 0 ? idx + 1 : 1)}`] || { l: '45%', t: '49%' };
+        targetLeft = fallbackPos.l;
+        targetTop = fallbackPos.t;
+      }
+    }
+
+    setRocketTargetPos({ l: targetLeft, t: targetTop });
+
+    // Play fast agile incoming Doppler flight sound
+    playSmallRocketIncomingSound();
+
+    setIsSmallRocketActive(true);
+
     setWeapons(prev => {
       const updated = { ...prev, smallRocket: Math.max(0, (prev.smallRocket || 320) - 1) };
       localStorage.setItem('pirate_weapons', JSON.stringify(updated));
       return updated;
     });
 
-    const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
-    const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
-      ? inspectedPlayer.ships
-      : getInspectedPlayerShips(inspectedPlayer);
-    const targetShip = selectedVisitedShip || baseShips[0];
+    // Fly small rocket (lasts 0.75s matching user video)
+    setTimeout(() => {
+      setIsSmallRocketActive(false);
+      setShowSmallRocketExplosion(true);
+      setIsShaking(true);
+      setRocketXpText('XP +100');
+      setShowRocketXp(true);
 
-    if (targetShip && targetDocId) {
-      let allDestroyed = false;
-      const updatedShips = baseShips.map((s: any) => {
-        if (s.id === targetShip.id) {
-          const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
-          const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
-          const newHeart = Math.max(0, currentHeart - 800);
-          return { ...s, heart: newHeart, ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {}) };
+      // Play authentic small rocket explosion sound
+      playSmallRocketExplosionSound();
+
+      const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
+
+      if (targetShip && targetDocId) {
+        let allDestroyed = false;
+        const updatedShips = baseShips.map((s: any) => {
+          if (s.id === targetShip.id) {
+            const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
+            const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
+            const newHeart = Math.max(0, currentHeart - 800);
+            return { ...s, heart: newHeart, ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {}) };
+          }
+          return s;
+        });
+
+        allDestroyed = updatedShips.length > 0 && updatedShips.every((s: any) => typeof s.heart === 'number' && s.heart <= 0);
+
+        const existingReports = Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports : [];
+        const newReport = {
+          id: `rocket_small_${Date.now()}`,
+          opponent: username,
+          opponentAvatar: avatar || '☠️',
+          type: 'defense',
+          result: 'defeat',
+          goldChange: 0,
+          date: new Date().toISOString(),
+          title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 استهداف سفينتك بصاروخ صغير!',
+          log: [
+            `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ صغير ملحقاً 800 نقطة ضرر!`,
+            allDestroyed ? `🔥 دُمرت جميع سفن أسطولك وأصبح الميناء محترقاً ومدمراً بالكامل!` : `⚠️ قم بصيانة وإصلاح أضرار هيكل السفينة فوراً.`
+          ]
+        };
+
+        // Secure collection-based dispatch to /harborEvents
+        createHarborEvent(targetDocId, 'ROCKET_SMALL', {
+          damage: 800,
+          targetShipId: targetShip.id,
+          allDestroyed,
+          newReport
+        });
+
+        // Direct persistent update to target user profile document in Firestore
+        if (targetDocId && db) {
+          updateDoc(doc(db, 'users', targetDocId), {
+            portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
+            ships: updatedShips,
+            battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
+            updatedAt: new Date().toISOString()
+          }).catch((err) => {
+            console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+          });
         }
-        return s;
-      });
 
-      allDestroyed = updatedShips.length > 0 && updatedShips.every((s: any) => typeof s.heart === 'number' && s.heart <= 0);
+        // Synchronize inspected player locally for immediate visual feedback
+        setInspectedPlayer((prev: any) => prev ? {
+          ...prev,
+          portDestroyed: allDestroyed || prev.portDestroyed,
+          ships: updatedShips
+        } : prev);
 
-      const existingReports = Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports : [];
-      const newReport = {
-        id: `rocket_small_${Date.now()}`,
-        opponent: username,
-        opponentAvatar: avatar || '☠️',
-        type: 'defense',
-        result: 'defeat',
-        goldChange: 0,
-        date: new Date().toISOString(),
-        title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 استهداف سفينتك بصاروخ صغير!',
-        log: [
-          `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ صغير ملحقاً 800 نقطة ضرر!`,
-          allDestroyed ? `🔥 دُمرت جميع سفن أسطولك وأصبح الميناء محترقاً ومدمراً بالكامل!` : `⚠️ قم بصيانة وإصلاح أضرار هيكل السفينة فوراً.`
-        ]
-      };
-
-      // Secure collection-based dispatch to /harborEvents
-      createHarborEvent(targetDocId, 'ROCKET_SMALL', {
-        damage: 800,
-        targetShipId: targetShip.id,
-        allDestroyed,
-        newReport
-      });
-
-      // Synchronize inspected player locally for immediate visual feedback
-      setInspectedPlayer((prev: any) => prev ? {
-        ...prev,
-        portDestroyed: allDestroyed || prev.portDestroyed,
-        ships: updatedShips
-      } : prev);
-
-      setRealPlayers(prev => prev.map(p => {
-        if (p.id === targetDocId || p.userId === targetDocId) {
-          return { ...p, portDestroyed: allDestroyed || p.portDestroyed, ships: updatedShips };
-        }
-        return p;
-      }));
-
-      if (selectedVisitedShip && selectedVisitedShip.id === targetShip.id) {
-        const updatedTarget = updatedShips.find((s: any) => s.id === targetShip.id);
-        setSelectedVisitedShip(updatedTarget || null);
+        setRealPlayers(prev => prev.map(p => {
+          if (p.id === targetDocId || p.userId === targetDocId) {
+            return { ...p, portDestroyed: allDestroyed || p.portDestroyed, ships: updatedShips };
+          }
+          return p;
+        }));
       }
-    }
-    
-    sendSecureChatMessage(
-      'القوات الصاروخية 🚀',
-      '🚀',
-      `🚀 صاروخ صغير! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} وألحق بها 800 ضرر!`
-    );
+      
+      sendSecureChatMessage(
+        'القوات الصاروخية 🚀',
+        '🚀',
+        `🚀 صاروخ صغير! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} وألحق بها 800 ضرر!`
+      );
 
-    showToast("💥 تم إطلاق الصاروخ الصغير وإصابة السفينة بـ 800 ضرر!", "success");
+      showToast("💥 تم إطلاق الصاروخ الصغير وإصابة السفينة بـ 800 ضرر!", "success");
+
+      // Reset screen shake after short punch
+      setTimeout(() => {
+        setIsShaking(false);
+      }, 450);
+
+      // Hide XP badge after 2.8s
+      setTimeout(() => {
+        setShowRocketXp(false);
+      }, 2800);
+    }, 750);
   };
 
   const handleLaunchMediumRocket = () => {
     if (!inspectedPlayer) return;
     
+    // Ensure all menus are closed
+    setSelectedVisitedShip(null);
+    setShowWeaponSelector(false);
+
     setWeapons(prev => {
       const updated = { ...prev, mediumRocket: Math.max(0, (prev.mediumRocket || 902) - 1) };
       localStorage.setItem('pirate_weapons', JSON.stringify(updated));
@@ -1510,6 +1403,18 @@ export default function App() {
         newReport
       });
 
+      // Direct persistent update to target user profile document in Firestore
+      if (targetDocId && db) {
+        updateDoc(doc(db, 'users', targetDocId), {
+          portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
+          ships: updatedShips,
+          battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
+          updatedAt: new Date().toISOString()
+        }).catch((err) => {
+          console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+        });
+      }
+
       // Synchronize inspected player locally
       setInspectedPlayer((prev: any) => prev ? {
         ...prev,
@@ -1523,11 +1428,6 @@ export default function App() {
         }
         return p;
       }));
-
-      if (selectedVisitedShip && selectedVisitedShip.id === targetShip.id) {
-        const updatedTarget = updatedShips.find((s: any) => s.id === targetShip.id);
-        setSelectedVisitedShip(updatedTarget || null);
-      }
     }
     
     sendSecureChatMessage(
@@ -1539,28 +1439,38 @@ export default function App() {
     showToast("💥 تم إطلاق الصاروخ المتوسط وإصابة السفينة بـ 4,000 ضرر!", "success");
   };
 
-  const handleLaunchLargeRocket = () => {
+  const handleLaunchLargeRocket = (targetShipOverride?: any) => {
     if (!inspectedPlayer) return;
     
-    // Play rocket launch sound
-    try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContext) {
-        const ctx = new AudioContext();
-        const now = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, now);
-        osc.frequency.linearRampToValueAtTime(800, now + 1.2);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now);
-        osc.stop(now + 1.2);
+    // Ensure all menus are closed immediately so nothing obstructs rocket trajectory or explosion
+    setSelectedVisitedShip(null);
+    setShowWeaponSelector(false);
+
+    // Determine the targeted ship and calculate its exact screen coordinates
+    const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
+      ? inspectedPlayer.ships
+      : getInspectedPlayerShips(inspectedPlayer);
+    const targetShip = targetShipOverride || selectedVisitedShip || baseShips[0];
+
+    let targetLeft = '45%';
+    let targetTop = '49%';
+    if (targetShip) {
+      if (targetShip.left && targetShip.top) {
+        targetLeft = targetShip.left;
+        targetTop = targetShip.top;
+      } else {
+        const idx = baseShips.findIndex((s: any) => s.id === targetShip.id);
+        const dockKey = `s${targetShip.id || (idx >= 0 ? idx + 1 : 1)}`;
+        const fallbackPos = docks[dockKey] || docks[`s${(idx >= 0 ? idx + 1 : 1)}`] || { l: '45%', t: '49%' };
+        targetLeft = fallbackPos.l;
+        targetTop = fallbackPos.t;
       }
-    } catch(e) {}
+    }
+
+    setRocketTargetPos({ l: targetLeft, t: targetTop });
+
+    // Play authentic rocket launch & incoming Doppler flight sound
+    playLargeRocketIncomingSound();
 
     setIsLargeRocketActive(true);
     
@@ -1573,38 +1483,19 @@ export default function App() {
       return updated;
     });
 
-    // Fly rocket (lasts 1.5 seconds)
+    // Fly rocket (lasts 1.25 seconds)
     setTimeout(() => {
       setIsLargeRocketActive(false);
       setShowLargeRocketExplosion(true);
       setIsShaking(true);
+      setRocketXpText('XP +1,200');
+      setShowRocketXp(true);
       
-      // Play heavy explosion sound
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
-          const ctx = new AudioContext();
-          const now = ctx.currentTime;
-          const osc = ctx.createOscillator();
-          const noise = ctx.createGain();
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(80, now);
-          osc.frequency.exponentialRampToValueAtTime(10, now + 0.8);
-          noise.gain.setValueAtTime(0.4, now);
-          noise.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-          osc.connect(noise);
-          noise.connect(ctx.destination);
-          osc.start(now);
-          osc.stop(now + 0.8);
-        }
-      } catch(e) {}
+      // Play heavy cinematic explosion sound matching user reference
+      playLargeRocketExplosionSound();
 
       // Deal 18,000 damage
       const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
-      const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
-        ? inspectedPlayer.ships
-        : getInspectedPlayerShips(inspectedPlayer);
-      const targetShip = selectedVisitedShip || baseShips[0];
 
       if (targetShip && targetDocId) {
         let allDestroyed = false;
@@ -1646,6 +1537,18 @@ export default function App() {
           newReport
         });
 
+        // Direct persistent update to target user profile document in Firestore
+        if (targetDocId && db) {
+          updateDoc(doc(db, 'users', targetDocId), {
+            portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
+            ships: updatedShips,
+            battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
+            updatedAt: new Date().toISOString()
+          }).catch((err) => {
+            console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+          });
+        }
+
         // Synchronize inspected player locally
         setInspectedPlayer((prev: any) => prev ? {
           ...prev,
@@ -1659,11 +1562,6 @@ export default function App() {
           }
           return p;
         }));
-
-        if (selectedVisitedShip && selectedVisitedShip.id === targetShip.id) {
-          const updatedTarget = updatedShips.find((s: any) => s.id === targetShip.id);
-          setSelectedVisitedShip(updatedTarget || null);
-        }
       }
 
       sendSecureChatMessage(
@@ -1672,14 +1570,23 @@ export default function App() {
         `🚀 صاروخ كبير فتاك! قصف القبطان @${username} سفن القبطان @${inspectedPlayer.username} بقوة تدميرية بلغت 18,000 ضرر!`
       );
 
-      showToast("💥 تم إطلاق الصاروخ الكبير وإصابة الأسطول بـ 18,000 ضرر!", "success");
+      showToast("💥 تم إطلاق الصاروخ الكبير وإصابة الهدف بـ 18,000 ضرر!", "success");
 
-    }, 1500);
+      // Impact camera shake lasts 650ms for realistic punch
+      setTimeout(() => {
+        setIsShaking(false);
+      }, 650);
+
+      // Hide XP pill after 2.8 seconds
+      setTimeout(() => {
+        setShowRocketXp(false);
+      }, 2800);
+
+    }, 1250);
 
     setTimeout(() => {
       setShowLargeRocketExplosion(false);
-      setIsShaking(false);
-    }, 3000);
+    }, 2800);
   };
 
   const handleDisableDefense = (type: 'rocket' | 'nuke' | 'ad') => {
@@ -1714,6 +1621,11 @@ export default function App() {
   const handleLaunchAdBomb = async (selectedAdKey: string) => {
     if (!inspectedPlayer) return;
 
+    // Ensure all menus are closed immediately
+    setSelectedVisitedShip(null);
+    setShowWeaponSelector(false);
+    setShowAdSelectorModal(false);
+
     // Deduct Ad Bomb
     setWeapons(prev => {
       const updated = {
@@ -1723,9 +1635,6 @@ export default function App() {
       localStorage.setItem('pirate_weapons', JSON.stringify(updated));
       return updated;
     });
-
-    // Close selector
-    setShowAdSelectorModal(false);
 
     // Trigger smoke explosion animation
     setShowSmokeExplosion(true);
@@ -1787,6 +1696,19 @@ export default function App() {
           newReport
         });
 
+        // Direct persistent update to target user profile document in Firestore
+        if (targetDocId && db) {
+          updateDoc(doc(db, 'users', targetDocId), {
+            portDestroyed: true,
+            activeAd: selectedAdKey,
+            ships: updatedShips,
+            battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
+            updatedAt: new Date().toISOString()
+          }).catch((err) => {
+            console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+          });
+        }
+
         // Synchronize local inspectedPlayer
         setInspectedPlayer((prev: any) => prev ? {
           ...prev,
@@ -1802,10 +1724,6 @@ export default function App() {
           }
           return p;
         }));
-
-        if (selectedVisitedShip) {
-          setSelectedVisitedShip((prev: any) => prev ? { ...prev, heart: 0 } : null);
-        }
       }
 
       // Secure Chat Announcement in Firestore
@@ -1815,17 +1733,20 @@ export default function App() {
         `📺 هجوم إعلاني ساحق! فجر القبطان @${username} قنبلة إعلانية على محيط القبطان @${inspectedPlayer.username} وبث إعلاناً بعنوان [${adTitle}] لمدة ساعة كاملة!`
       );
 
-      // Show Global Message popup
-      setShowGlobalMessageModal(true);
-
     }, 1800);
   };
 
   const handleLaunchAtomicBomb = async () => {
     if (!inspectedPlayer) return;
     
-    playNuclearExplosionSound();
+    // Ensure all menus are closed immediately so nothing obstructs falling bomb or nuclear explosion
+    setSelectedVisitedShip(null);
+    setShowWeaponSelector(false);
+
+    // Play falling bomb whistle sound matching video reference
+    playAtomicBombDropSound();
     setIsAtomicBombActive(true);
+    setShowAtomicBombXp(true);
 
     // Deduct bomb
     setWeapons(prev => {
@@ -1837,12 +1758,14 @@ export default function App() {
       return updated;
     });
 
-    // Stage 1: Fall down & strike
+    // Stage 1: Fall down & strike sea (1.18s exactly matching video)
     setTimeout(() => {
       setIsAtomicBombActive(false);
       setShowAtomicExplosion(true);
       setIsShaking(true);
-      setGainedXpAnim(true);
+      
+      // Play heavy nuclear detonation boom matching video reference
+      playAtomicBombExplosionSound();
       
       setExp(prev => prev + 2500);
 
@@ -1882,6 +1805,18 @@ export default function App() {
           newReport
         });
 
+        // Direct persistent update to target user profile document in Firestore
+        if (targetDocId && db) {
+          updateDoc(doc(db, 'users', targetDocId), {
+            portDestroyed: true,
+            ships: updatedShips,
+            battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
+            updatedAt: new Date().toISOString()
+          }).catch((err) => {
+            console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+          });
+        }
+
         // Synchronize local inspectedPlayer
         setInspectedPlayer((prev: any) => prev ? {
           ...prev,
@@ -1896,10 +1831,6 @@ export default function App() {
           }
           return p;
         }));
-
-        if (selectedVisitedShip) {
-          setSelectedVisitedShip((prev: any) => prev ? { ...prev, heart: 0 } : null);
-        }
       }
 
       // Secure Chat Announcement in Firestore
@@ -1908,27 +1839,33 @@ export default function App() {
         '🚀',
         `☢️ كارثة نووية! أطلق القبطان مباغتاً @${username} قنبلة ذرية فتاكة على ميناء القبطان @${inspectedPlayer.username} مدخّناً السفن ومخلفاً دماراً شاملاً!`
       );
-    }, 1800);
 
-    // Stage 2: Stop flash and shaking after 3.2s
+      // Camera shake lasts 950ms for solid nuclear impact punch
+      setTimeout(() => {
+        setIsShaking(false);
+      }, 950);
+
+      // Hide XP pill after 2.8s
+      setTimeout(() => {
+        setShowAtomicBombXp(false);
+      }, 2800);
+
+    }, 1180);
+
+    // Stage 2: Stop explosion overlay after 3.4s
     setTimeout(() => {
       setShowAtomicExplosion(false);
-      setIsShaking(false);
-    }, 3200);
+    }, 3400);
 
     // Stage 3: Reset XP anim
     setTimeout(() => {
       setGainedXpAnim(false);
     }, 5000);
 
-    // Stage 4: Open Loot selector and Global Message Modal!
+    // Stage 4: Reset state (do NOT auto-open loot selector or global message modal)
     setTimeout(() => {
       setSelectedLootCard(null);
       setLootResultText('');
-      setShowLootSelector(true);
-      
-      // Open Global Message Popup right after the explosion
-      setShowGlobalMessageModal(true);
     }, 3500);
   };
 
@@ -2076,6 +2013,7 @@ export default function App() {
   });
 
   const [confirmModal, setConfirmModal] = useState(false);
+  const [repairModalShip, setRepairModalShip] = useState<ShipState | null>(null);
   const shipMenuRef = useRef<HTMLDivElement>(null);
   const [rewardModal, setRewardModal] = useState(false);
   const [questsExpanded, setQuestsExpanded] = useState(true);
@@ -4159,9 +4097,16 @@ export default function App() {
   // --- Dedicated Single-Ship Action Handlers (supports manual & autonomous Golden Hunter) ---
   const startShipFishing = (targetShipId: string, isAuto = false) => {
     if (!targetShipId) return;
-    updateQuestProgress('q1', 1);
 
     const selectedShip = ships.find(s => s.id === targetShipId);
+    if (selectedShip && (portDestroyed || (typeof selectedShip.heart === 'number' && selectedShip.heart <= 0))) {
+      showToast('⚠️ هذه السفينة مدمّرة بنيران المعارك! يرجى صيانتها وإصلاح هيكلها لتتمكن من الإبحار.', 'error');
+      setRepairModalShip(selectedShip);
+      return;
+    }
+
+    updateQuestProgress('q1', 1);
+
     const shipCrew = selectedShip?.assignedCrew || [];
     const isAutoActive = isAuto || (!selectedShip?.autoFishingPaused && (shipCrew.includes('golden_hunter') || shipCrew.includes('gold_fisher')));
 
@@ -4573,8 +4518,143 @@ export default function App() {
     return () => clearInterval(autoTimer);
   }, [ships, fishStorageLevel, pirateClass, fishInventory]);
 
+  // --- Ship Repair Handler (Manual & Kit Repairs) ---
+  const handleRepairShip = async (
+    targetShipId: string, 
+    type: 'small' | 'medium' | 'large' | 'legendary' | 'gold' | 'gems'
+  ) => {
+    const targetShip = ships.find(s => s.id === targetShipId);
+    if (!targetShip) return;
+
+    const maxH = targetShip.maxHeart || ((targetShip.level || 0) * 1000) + 10000;
+    const curH = typeof targetShip.heart === 'number' ? targetShip.heart : maxH;
+
+    if (type !== 'legendary' && type !== 'gems' && curH >= maxH) {
+      showToast('⚠️ هيكل هذه السفينة سليم بالكامل ولا يحتاج لصيانة!', 'info');
+      return;
+    }
+
+    let updatedCrewServices = { ...crewServices };
+    let newGold = gold;
+    let newGems = gems;
+    let healAmount = 0;
+    let repairAll = false;
+
+    if (type === 'small') {
+      const count = crewServices.repairer_small || 0;
+      if (count <= 0) {
+        showToast('⚠️ ليس لديك مصلح صغير في المستودع! يمكنك شراؤه من المتجر أو الإصلاح بالذهب.', 'error');
+        return;
+      }
+      updatedCrewServices.repairer_small = count - 1;
+      healAmount = 500;
+    } else if (type === 'medium') {
+      const count = crewServices.repairer_medium || 0;
+      if (count <= 0) {
+        showToast('⚠️ ليس لديك مصلح وسط في المستودع! يمكنك شراؤه من المتجر أو الإصلاح بالذهب.', 'error');
+        return;
+      }
+      updatedCrewServices.repairer_medium = count - 1;
+      healAmount = curH <= 0 ? 1000 : Math.max(1000, Math.floor(maxH * 0.5));
+    } else if (type === 'large') {
+      const count = crewServices.repairer_large || 0;
+      if (count <= 0) {
+        showToast('⚠️ ليس لديك مصلح كبير في المستودع! يمكنك شراؤه من المتجر أو الإصلاح بالذهب.', 'error');
+        return;
+      }
+      updatedCrewServices.repairer_large = count - 1;
+      healAmount = maxH - curH;
+    } else if (type === 'legendary') {
+      const count = crewServices.repairer_legendary || 0;
+      if (count <= 0) {
+        showToast('⚠️ ليس لديك مصلح أسطوري في المستودع! يمكنك شراؤه من المتجر أو الصيانة بالجواهر.', 'error');
+        return;
+      }
+      updatedCrewServices.repairer_legendary = count - 1;
+      repairAll = true;
+    } else if (type === 'gold') {
+      const cost = 500;
+      if (gold < cost) {
+        showToast(`❌ الذهب غير كافٍ للصيانة! تحتاج إلى ${cost} 🪙 ذهب.`, 'error');
+        return;
+      }
+      newGold = gold - cost;
+      healAmount = maxH - curH;
+    } else if (type === 'gems') {
+      const cost = 10;
+      if (gems < cost) {
+        showToast(`❌ الجواهر غير كافية للصيانة! تحتاج إلى ${cost} 💎 جوهرة.`, 'error');
+        return;
+      }
+      newGems = gems - cost;
+      repairAll = true;
+    }
+
+    let updatedShips: ShipState[];
+    if (repairAll) {
+      updatedShips = ships.map(s => {
+        const mH = s.maxHeart || ((s.level || 0) * 1000) + 10000;
+        return {
+          ...s,
+          heart: mH,
+          status: 'docked' as const,
+          moving: false
+        };
+      });
+      setPortDestroyed(false);
+      localStorage.setItem('pirate_port_destroyed', 'false');
+    } else {
+      updatedShips = ships.map(s => {
+        if (s.id === targetShipId) {
+          const newH = Math.min(maxH, curH + healAmount);
+          return {
+            ...s,
+            heart: newH,
+            status: 'docked' as const,
+            moving: false
+          };
+        }
+        return s;
+      });
+    }
+
+    setShips(updatedShips);
+    setCrewServices(updatedCrewServices);
+    setGold(newGold);
+    setGems(newGems);
+
+    localStorage.setItem('pirate_ships_v2', JSON.stringify(updatedShips));
+    localStorage.setItem('pirate_ships', JSON.stringify(updatedShips));
+    localStorage.setItem('pirate_crew_services', JSON.stringify(updatedCrewServices));
+
+    // Persist immediately to Firestore
+    if (auth.currentUser && db) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      updateDoc(userRef, {
+        ships: updatedShips,
+        crewServices: updatedCrewServices,
+        gold: newGold,
+        gems: newGems,
+        portDestroyed: repairAll ? false : portDestroyed,
+        updatedAt: new Date().toISOString()
+      }).catch(console.error);
+    }
+
+    if (repairModalShip && repairModalShip.id === targetShipId) {
+      const refreshedTarget = updatedShips.find(s => s.id === targetShipId);
+      setRepairModalShip(refreshedTarget || null);
+    }
+
+    showToast(
+      repairAll 
+        ? '👑 تم صيانة وترميم كامل أسطول السفن بنسبة 100% بنجاح!' 
+        : `🔧 تم صيانة وترميم هيكل [${targetShip.name}] بنجاح!`,
+      'success'
+    );
+  };
+
   // --- Perform Ship Actions ---
-  const act = (type: 'crew' | 'sell' | 'fish' | 'collect') => {
+  const act = (type: 'crew' | 'sell' | 'fish' | 'collect' | 'repair') => {
     setMenu(prev => ({ ...prev, visible: false }));
     if (!currentShipId) return;
 
@@ -4582,7 +4662,18 @@ export default function App() {
       setConfirmModal(true);
     } else if (type === 'crew') {
       setCrewModal(true);
+    } else if (type === 'repair') {
+      const shipToRepair = ships.find(s => s.id === currentShipId);
+      if (shipToRepair) {
+        setRepairModalShip(shipToRepair);
+      }
     } else if (type === 'fish') {
+      const shipObj = ships.find(s => s.id === currentShipId);
+      if (shipObj && (portDestroyed || (typeof shipObj.heart === 'number' && shipObj.heart <= 0))) {
+        showToast('⚠️ هذه السفينة مدمّرة بنيران المعارك! يرجى صيانتها وإصلاح هيكلها أولاً لتتمكن من الإبحار والصيد.', 'error');
+        setRepairModalShip(shipObj);
+        return;
+      }
       startShipFishing(currentShipId);
     } else if (type === 'collect') {
       collectShipFish(currentShipId, false);
@@ -7598,6 +7689,8 @@ export default function App() {
                   }
                 }
 
+                const isShipDestroyed = portDestroyed || (typeof ship.heart === 'number' && ship.heart <= 0);
+
                 return (
                   <React.Fragment key={ship.id}>
                     <div
@@ -7606,12 +7699,12 @@ export default function App() {
                       style={{
                         left: ship.left,
                         top: ship.top,
-                        filter: portDestroyed 
+                        filter: isShipDestroyed 
                           ? 'grayscale(0.9) brightness(0.18) contrast(1.5) sepia(0.6) hue-rotate(-20deg) drop-shadow(0 0 12px rgba(239,68,68,0.9))' 
                           : mapAuraFilter,
                         transition: `left ${ship.transitionDuration || '2s'} ease-in-out, top ${ship.transitionDuration || '2s'} ease-in-out, transform 0.25s ease-in-out`,
                         willChange: 'left, top, transform',
-                        transform: `scaleX(${ship.scaleX}) ${portDestroyed ? getDestroyedShipStyles(ship.id).transform : ''} translateZ(0)`,
+                        transform: `scaleX(${ship.scaleX}) ${isShipDestroyed ? getDestroyedShipStyles(ship.id).transform : ''} translateZ(0)`,
                         backfaceVisibility: 'hidden',
                         WebkitBackfaceVisibility: 'hidden'
                       }}
@@ -7626,7 +7719,7 @@ export default function App() {
                           position: 'relative',
                           width: '100%',
                           height: '100%',
-                          filter: portDestroyed ? 'grayscale(1) brightness(0.25) contrast(1.3) sepia(1) hue-rotate(-20deg)' : 'none',
+                          filter: isShipDestroyed ? 'grayscale(1) brightness(0.25) contrast(1.3) sepia(1) hue-rotate(-20deg)' : 'none',
                           transition: 'filter 1.2s ease'
                         }}>
                           <ShipImage level={typeof ship.level === 'number' ? ship.level : 0} width={280} plain={true} fill={true} />
@@ -7637,7 +7730,7 @@ export default function App() {
                           )}
 
                           {/* Autonomous Golden Hunter Fishing Status Badge & Direct Pause/Play Clickable Toggle */}
-                          {ship.assignedCrew && (ship.assignedCrew.includes('golden_hunter') || ship.assignedCrew.includes('gold_fisher')) && !portDestroyed && (
+                          {ship.assignedCrew && (ship.assignedCrew.includes('golden_hunter') || ship.assignedCrew.includes('gold_fisher')) && !isShipDestroyed && (
                             <div 
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -7662,7 +7755,7 @@ export default function App() {
                           )}
                           
                           {/* Fire & Smoke overlay for destroyed local ship */}
-                          {portDestroyed && (
+                          {isShipDestroyed && (
                             <div style={{
                               position: 'absolute',
                               inset: 0,
@@ -7697,27 +7790,85 @@ export default function App() {
                               }}>
                                 💨
                               </span>
-                              {/* Status Label Badge */}
-                              <span style={{
-                                position: 'absolute',
-                                bottom: '4px',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                fontSize: '11px',
-                                fontWeight: 'bold',
-                                color: '#fca5a5',
-                                background: 'rgba(0,0,0,0.85)',
-                                padding: '3px 8px',
-                                borderRadius: '4px',
-                                border: '1px solid #ef4444',
-                                whiteSpace: 'nowrap',
-                                boxShadow: '0 2px 10px rgba(239, 68, 68, 0.4)',
-                                zIndex: 16
-                              }}>
-                                {getDestroyedShipStyles(ship.id).statusLabel}
-                              </span>
+                              {/* Status Label Badge & Repair Button */}
+                              <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRepairModalShip(ship);
+                                }}
+                                title="اضغط لفتح ورشة إصلاح وصيانة السفينة فوراً"
+                                style={{
+                                  position: 'absolute',
+                                  bottom: '-12px',
+                                  left: '50%',
+                                  transform: 'translateX(-50%)',
+                                  fontSize: '11px',
+                                  fontWeight: 'bold',
+                                  color: '#fff',
+                                  background: 'linear-gradient(135deg, #b91c1c, #7f1d1d)',
+                                  padding: '3px 10px',
+                                  borderRadius: '16px',
+                                  border: '1.5px solid #f87171',
+                                  whiteSpace: 'nowrap',
+                                  boxShadow: '0 4px 14px rgba(239, 68, 68, 0.75)',
+                                  zIndex: 35,
+                                  cursor: 'pointer',
+                                  pointerEvents: 'auto',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  animation: 'pulse 1.5s infinite'
+                                }}
+                              >
+                                <span>{getDestroyedShipStyles(ship.id).statusLabel}</span>
+                                <span style={{ background: '#10b981', color: '#fff', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>
+                                  🔧 إصلاح
+                                </span>
+                              </div>
                             </div>
                           )}
+
+                          {/* Interactive Damaged Ship Indicator (when damaged but not fully destroyed) */}
+                          {(() => {
+                            const maxH = ship.maxHeart || ((ship.level || 0) * 1000) + 10000;
+                            const curH = typeof ship.heart === 'number' ? ship.heart : maxH;
+                            if (!isShipDestroyed && curH < maxH) {
+                              return (
+                                <div 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setRepairModalShip(ship);
+                                  }}
+                                  title="اضغط لصيانة وترميم السفينة"
+                                  style={{
+                                    position: 'absolute',
+                                    top: '-24px',
+                                    left: '50%',
+                                    transform: `translateX(-50%) scaleX(${ship.scaleX < 0 ? -1 : 1})`,
+                                    cursor: 'pointer',
+                                    pointerEvents: 'auto',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    fontSize: '10px',
+                                    fontWeight: 'bold',
+                                    color: '#fef08a',
+                                    background: 'rgba(24, 18, 12, 0.92)',
+                                    border: '1px solid #eab308',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    whiteSpace: 'nowrap',
+                                    zIndex: 25,
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.6)'
+                                  }}
+                                >
+                                  <span>❤️ {curH.toLocaleString()} / {maxH.toLocaleString()} HP</span>
+                                  <span style={{ color: '#34d399', fontWeight: 'bold' }}>🔧 صيانة</span>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                         
                         {/* Fishing Net hanging down under the boat when fishing or returning with catch */}
@@ -11613,23 +11764,93 @@ export default function App() {
                   transform: rotate(-45deg) scale(1.3);
                 }
               }
+              @keyframes fly-rocket-targeted {
+                0% {
+                  left: 88%;
+                  top: -20%;
+                  transform: translate(-50%, -50%) rotate(-135deg) scale(0.65);
+                  opacity: 0;
+                }
+                10% {
+                  opacity: 1;
+                }
+                100% {
+                  left: var(--rocket-target-x, 45%);
+                  top: var(--rocket-target-y, 49%);
+                  transform: translate(-50%, -50%) rotate(-135deg) scale(1.2);
+                  opacity: 1;
+                }
+              }
+              @keyframes fly-rocket-small-targeted {
+                0% {
+                  left: 90%;
+                  top: -15%;
+                  transform: translate(-50%, -50%) rotate(-135deg) scale(0.6);
+                  opacity: 0;
+                }
+                10% {
+                  opacity: 1;
+                }
+                100% {
+                  left: var(--rocket-target-x, 45%);
+                  top: var(--rocket-target-y, 49%);
+                  transform: translate(-50%, -50%) rotate(-135deg) scale(0.95);
+                  opacity: 1;
+                }
+              }
+              @keyframes float-xp-topleft {
+                0% {
+                  transform: translateY(-20px) scale(0.85);
+                  opacity: 0;
+                }
+                15% {
+                  transform: translateY(0) scale(1.05);
+                  opacity: 1;
+                }
+                25% {
+                  transform: translateY(0) scale(1);
+                  opacity: 1;
+                }
+                80% {
+                  transform: translateY(0) scale(1);
+                  opacity: 1;
+                }
+                100% {
+                  transform: translateY(-12px) scale(0.95);
+                  opacity: 0;
+                }
+              }
               @keyframes fall-down {
                 0% {
-                  top: -220px;
-                  transform: translateX(-50%) scale(0.4) rotate(25deg);
+                  top: -120px;
+                  transform: translateX(-50%) scale(0.65) rotate(6deg);
                   filter: brightness(1);
                   opacity: 0;
                 }
                 15% {
                   opacity: 1;
                 }
-                90% {
-                  filter: brightness(1.5) drop-shadow(0 0 15px #f59e0b);
+                85% {
+                  transform: translateX(-50%) scale(1.0) rotate(0deg);
+                  filter: brightness(1.2) drop-shadow(0 0 16px rgba(255, 152, 0, 0.75));
                 }
                 100% {
-                  top: 55%;
-                  transform: translateX(-50%) scale(1) rotate(0deg);
-                  filter: brightness(5) drop-shadow(0 0 35px #ffffff);
+                  top: 58%;
+                  transform: translateX(-50%) scale(1.15) rotate(0deg);
+                  filter: brightness(2.2) drop-shadow(0 0 30px #ffffff);
+                }
+              }
+              @keyframes water-landing-splash {
+                0% {
+                  transform: translate(-50%, -50%) scale(0.15);
+                  opacity: 0;
+                }
+                40% {
+                  opacity: 0.9;
+                }
+                100% {
+                  transform: translate(-50%, -50%) scale(1.8);
+                  opacity: 0;
                 }
               }
               @keyframes thruster-flame {
@@ -11770,14 +11991,42 @@ export default function App() {
             `}</style>
 
           {/* Sea View Playground where Ships sit on the water */}
-          <div style={{
-            flex: 1,
-            position: 'relative',
-            overflow: 'hidden',
-            animation: isShaking 
-              ? 'shake-viewport-extreme 3.5s cubic-bezier(0.1, 0.8, 0.2, 1) infinite, camera-flash-and-grade 3.0s cubic-bezier(0.1, 0.9, 0.3, 1) forwards' 
-              : 'none'
-          }}>
+          <div 
+            onClick={(e) => {
+              if (isAtomicBombActive || showAtomicExplosion || isLargeRocketActive || showLargeRocketExplosion || isSmallRocketActive || showSmallRocketExplosion || showSmokeExplosion) {
+                return;
+              }
+              const target = e.target as HTMLElement;
+              // If clicked directly on the playground or video/background layer (clicking the port/harbor)
+              const isPortClick = target === e.currentTarget || target.tagName === 'VIDEO' || target.getAttribute('data-harbor-bg') === 'true';
+              if (isPortClick) {
+                const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
+                  ? inspectedPlayer.ships
+                  : getInspectedPlayerShips(inspectedPlayer);
+                const firstShip = baseShips[0] || { name: 'سفينة الأسطول', level: 1, power: 10, cargo: 2000, heart: inspectedPlayer.portDestroyed ? 0 : 10000 };
+                const shipSpec = SHOP_SHIPS.find(s => s.level === firstShip.level) || SHOP_SHIPS[0];
+                const firstLevel = firstShip.level || shipSpec.level || 1;
+                setSelectedVisitedShip({
+                  ...firstShip,
+                  name: firstShip.name || shipSpec.name,
+                  level: firstLevel,
+                  cargo: firstShip.cargo || getShipCapacity(firstLevel) || 2000,
+                  heart: typeof firstShip.heart === 'number' ? firstShip.heart : (inspectedPlayer.portDestroyed ? 0 : (shipSpec.heart || 10000)),
+                  power: firstShip.power || shipSpec.power || 10
+                });
+                setActiveInteractionType('details');
+              }
+            }}
+            style={{
+              flex: 1,
+              position: 'relative',
+              overflow: 'hidden',
+              cursor: 'pointer',
+              animation: isShaking 
+                ? 'shake-viewport-extreme 3.5s cubic-bezier(0.1, 0.8, 0.2, 1) infinite, camera-flash-and-grade 3.0s cubic-bezier(0.1, 0.9, 0.3, 1) forwards' 
+                : 'none'
+            }}
+          >
             {/* Real animated water background video - only if port is not destroyed */}
             {!inspectedPlayer.portDestroyed && (
               <video
@@ -11800,30 +12049,36 @@ export default function App() {
             )}
             
             {/* Fallback/Main background image - shows destroyed port if visited port is destroyed */}
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              backgroundImage: inspectedPlayer.portDestroyed 
-                ? "url('/backgrounds/destroyed_port.webp')" 
-                : "url('/backgrounds/harbor_main.webp')",
-              backgroundSize: '100% 100%',
-              backgroundPosition: 'center bottom',
-              backgroundRepeat: 'no-repeat',
-              zIndex: 0,
-              pointerEvents: 'none'
-            }} />
+            <div 
+              data-harbor-bg="true"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                backgroundImage: inspectedPlayer.portDestroyed 
+                  ? "url('/backgrounds/destroyed_port.webp')" 
+                  : "url('/backgrounds/harbor_main.webp')",
+                backgroundSize: '100% 100%',
+                backgroundPosition: 'center bottom',
+                backgroundRepeat: 'no-repeat',
+                zIndex: 0,
+                pointerEvents: 'none'
+              }} 
+            />
 
             {/* Ambient water tint layer */}
-            <div style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 3,
-              background: inspectedPlayer.portDestroyed ? 'rgba(0,0,0,0.45)' : 'rgba(2, 35, 64, 0.15)',
-              pointerEvents: 'none'
-            }} />
+            <div 
+              data-harbor-bg="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 3,
+                background: inspectedPlayer.portDestroyed ? 'rgba(0,0,0,0.45)' : 'rgba(2, 35, 64, 0.15)',
+                pointerEvents: 'none'
+              }} 
+            />
 
             {/* Real-time particles overlay if the visited port is destroyed */}
             {inspectedPlayer.portDestroyed && (
@@ -12031,6 +12286,8 @@ export default function App() {
                   }
                 }
 
+                const isShipDestroyed = Boolean(inspectedPlayer.portDestroyed || (typeof ship.heart === 'number' && ship.heart <= 0));
+
                 return (
                   <div
                     key={ship.id || index}
@@ -12039,21 +12296,25 @@ export default function App() {
                       position: 'absolute',
                       left: shipLeft,
                       top: shipTop,
-                      transform: `scaleX(${shipScaleX}) ${inspectedPlayer.portDestroyed ? 'rotate(12deg) translateY(24px)' : ''}`,
+                      transform: `scaleX(${shipScaleX}) ${isShipDestroyed ? 'rotate(12deg) translateY(24px)' : ''}`,
                       zIndex: 5,
                       cursor: 'pointer',
-                      filter: inspectedPlayer.portDestroyed 
+                      filter: isShipDestroyed 
                         ? 'grayscale(0.85) brightness(0.22) contrast(1.4) sepia(0.5) hue-rotate(-15deg) drop-shadow(0 0 10px rgba(239,68,68,0.85))' 
                         : shipAuraFilter,
                       transition: `left ${ship.transitionDuration || '2s'} ease-in-out, top ${ship.transitionDuration || '2s'} ease-in-out, transform 0.5s ease-in-out`,
                     }}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isAtomicBombActive || showAtomicExplosion || isLargeRocketActive || showLargeRocketExplosion || isSmallRocketActive || showSmallRocketExplosion || showSmokeExplosion) {
+                        return;
+                      }
                       setSelectedVisitedShip({
                         ...ship,
                         name: ship.name || shipSpec.name,
                         level: shipLevel,
                         cargo: shipCapacity,
-                        heart: ship.heart !== undefined ? ship.heart : shipSpec.heart,
+                        heart: ship.heart !== undefined ? ship.heart : (inspectedPlayer.portDestroyed ? 0 : shipSpec.heart),
                         power: ship.power || shipSpec.power
                       });
                       setActiveInteractionType('details');
@@ -12131,13 +12392,13 @@ export default function App() {
                         position: 'relative',
                         width: '100%',
                         height: '100%',
-                        filter: inspectedPlayer.portDestroyed ? 'grayscale(1) brightness(0.25) contrast(1.3) sepia(1) hue-rotate(-20deg)' : 'none',
+                        filter: isShipDestroyed ? 'grayscale(1) brightness(0.25) contrast(1.3) sepia(1) hue-rotate(-20deg)' : 'none',
                         transition: 'filter 1.2s ease'
                       }}>
                         <ShipImage level={shipLevel} width={280} plain={true} fill={true} />
                         
                         {/* Burning smoke & fire for wrecked ships */}
-                        {inspectedPlayer.portDestroyed && (
+                        {isShipDestroyed && (
                           <div style={{
                             position: 'absolute',
                             inset: 0,
@@ -12231,242 +12492,216 @@ export default function App() {
               🌀
             </div>
 
-            {/* Animated Descending Tactical Nuclear Bomb */}
+            {/* Animated Descending Atomic Bomb (1.18s matching video) */}
             {isAtomicBombActive && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                zIndex: 999,
-                animation: 'fall-down 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
-                pointerEvents: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-              }}>
+              <div 
+                style={{
+                  position: 'absolute',
+                  left: '42%',
+                  zIndex: 9999,
+                  animation: 'fall-down 1.18s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                }}
+              >
                 <img 
                   src={WEAPON_ATOMIC_BOMB_ICON} 
                   alt="قنبلة ذرية ساقطة" 
                   referrerPolicy="no-referrer"
-                  style={{ width: '90px', height: '90px', objectFit: 'contain', filter: 'drop-shadow(0 0 20px rgba(239, 68, 68, 0.9))' }} 
+                  style={{ 
+                    width: '84px', 
+                    height: '84px', 
+                    objectFit: 'contain', 
+                    filter: 'drop-shadow(0 0 16px rgba(255, 152, 0, 0.85)) drop-shadow(0 4px 10px rgba(0,0,0,0.8))' 
+                  }} 
                 />
-                {/* Radiation pulse overlay */}
-                <div style={{
-                  fontSize: '24px',
-                  marginTop: '-15px',
-                  animation: 'pulse 0.8s infinite',
-                  filter: 'drop-shadow(0 0 10px #eab308)'
-                }}>
-                  ☢️
+                {/* Water landing splash circle right as bomb nears the sea */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '80px',
+                    left: '50%',
+                    width: '90px',
+                    height: '35px',
+                    borderRadius: '50%',
+                    border: '3px solid rgba(255, 255, 255, 0.85)',
+                    background: 'radial-gradient(ellipse, rgba(255,255,255,0.4) 0%, transparent 70%)',
+                    animation: 'water-landing-splash 1.18s ease-in forwards',
+                    pointerEvents: 'none'
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Authentic Cartoon Mushroom Cloud Nuclear Explosion Component */}
+            {showAtomicExplosion && (
+              <AtomicBombExplosion
+                x="42%"
+                y="58%"
+                onComplete={() => setShowAtomicExplosion(false)}
+              />
+            )}
+
+            {/* Real-time Floating XP Badge for Atomic Bomb Matching Video */}
+            {showAtomicBombXp && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '18px',
+                  left: '18px',
+                  zIndex: 9999,
+                  background: 'rgba(15, 10, 5, 0.94)',
+                  border: '2px solid #ca8a04',
+                  borderRadius: '24px',
+                  padding: '6px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.85), 0 0 14px rgba(202, 138, 4, 0.5)',
+                  animation: 'float-xp-topleft 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                  pointerEvents: 'none',
+                  direction: 'ltr',
+                }}
+              >
+                <span style={{ fontSize: '15px' }}>⭐</span>
+                <span style={{ fontSize: '14px', fontWeight: 900, color: '#fde047', letterSpacing: '0.5px' }}>
+                  XP +2500
+                </span>
+              </div>
+            )}
+
+            {/* Real-time Floating XP Badge Matching Video */}
+            {showRocketXp && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '18px',
+                  left: '18px',
+                  zIndex: 9999,
+                  background: 'rgba(15, 10, 5, 0.94)',
+                  border: '2px solid #ca8a04',
+                  borderRadius: '24px',
+                  padding: '6px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.85), 0 0 14px rgba(202, 138, 4, 0.5)',
+                  animation: 'float-xp-topleft 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                  pointerEvents: 'none',
+                  direction: 'ltr',
+                }}
+              >
+                <span style={{ fontSize: '15px' }}>⭐</span>
+                <span style={{ fontSize: '14px', fontWeight: 900, color: '#fde047', letterSpacing: '0.5px' }}>
+                  {rocketXpText || 'XP +100'}
+                </span>
+              </div>
+            )}
+
+            {/* Small Rocket Flying Animation (Matching User Reference Video) */}
+            {isSmallRocketActive && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  zIndex: 9999,
+                  pointerEvents: 'none',
+                  animation: 'fly-rocket-small-targeted 0.75s cubic-bezier(0.2, 0.7, 0.35, 1) forwards',
+                  '--rocket-target-x': rocketTargetPos.l,
+                  '--rocket-target-y': rocketTargetPos.t,
+                } as React.CSSProperties}
+              >
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img 
+                    src={WEAPON_SMALL_MISSILE_ICON} 
+                    alt="صاروخ صغير طائر" 
+                    referrerPolicy="no-referrer"
+                    style={{ 
+                      width: '48px', 
+                      height: '48px', 
+                      objectFit: 'contain', 
+                      filter: 'drop-shadow(0 0 12px rgba(250, 204, 21, 0.95)) drop-shadow(0 2px 8px rgba(0,0,0,0.8))' 
+                    }} 
+                  />
+                  {/* Thruster exhaust flame behind the small missile */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-10px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '15px',
+                    height: '24px',
+                    borderRadius: '50% 50% 20% 20%',
+                    background: 'radial-gradient(ellipse at top, #ffffff 10%, #fef08a 35%, #f97316 70%, transparent 100%)',
+                    animation: 'thruster-flame 0.1s infinite alternate',
+                    filter: 'drop-shadow(0 0 8px #f97316)',
+                    zIndex: -1
+                  }} />
                 </div>
-              </div>
-            )}
-
-            {/* Nuclear Blinding Flash and Glow */}
-            {showAtomicExplosion && (
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                zIndex: 998,
-                animation: 'nuclear-flash 3.5s ease-out forwards',
-                pointerEvents: 'none'
-              }} />
-            )}
-
-            {/* Expanding Shockwave Ring */}
-            {showAtomicExplosion && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                top: '55%',
-                transform: 'translate(-50%, -50%)',
-                borderRadius: '50%',
-                border: '12px double rgba(255, 255, 255, 0.95)',
-                boxShadow: '0 0 50px rgba(255,255,255,0.9), inset 0 0 40px rgba(251,146,60,0.6)',
-                zIndex: 996,
-                pointerEvents: 'none',
-                animation: 'shockwave-expand-realistic 3.0s cubic-bezier(0.1, 0.85, 0.25, 1) forwards'
-              }} />
-            )}
-
-            {/* Base Dust / Debris Ring */}
-            {showAtomicExplosion && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                top: '55%',
-                transform: 'translate(-50%, -10%)',
-                width: '380px',
-                height: '110px',
-                borderRadius: '50%',
-                background: 'radial-gradient(ellipse, rgba(234,88,12,0.4) 0%, rgba(30,41,59,0.7) 50%, rgba(0,0,0,0) 70%)',
-                border: '2px solid rgba(251,146,60,0.3)',
-                boxShadow: '0 0 40px rgba(234,88,12,0.5)',
-                zIndex: 994,
-                pointerEvents: 'none',
-                animation: 'base-dust-ring 3.5s ease-out forwards'
-              }} />
-            )}
-
-            {/* Volumetric Glowing Stem (Column) */}
-            {showAtomicExplosion && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                top: '25%', // rises up to meet the cap
-                width: '60px',
-                background: 'linear-gradient(to top, rgba(120,41,12,0.95) 0%, rgba(234,88,12,0.9) 30%, rgba(251,146,60,0.85) 60%, rgba(30,41,59,0.9) 100%)',
-                borderLeft: '4px solid rgba(254,240,138,0.45)',
-                borderRight: '4px solid rgba(254,240,138,0.45)',
-                transformOrigin: 'bottom center',
-                transform: 'translateX(-50%)',
-                zIndex: 995,
-                boxShadow: '0 0 35px rgba(234,88,12,0.85), 0 0 70px rgba(251,146,60,0.5)',
-                pointerEvents: 'none',
-                animation: 'central-fire-core 3.0s linear infinite, stem-rise-volumetric 3.0s cubic-bezier(0.1, 0.8, 0.2, 1) forwards'
-              }} />
-            )}
-
-            {/* Photorealistic Volumetric Mushroom Cloud Cap */}
-            {showAtomicExplosion && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                top: '55%',
-                width: '360px',
-                height: '360px',
-                zIndex: 997,
-                pointerEvents: 'none',
-                animation: 'mushroom-cap-billow 3.2s cubic-bezier(0.1, 0.85, 0.25, 1) forwards'
-              }}>
-                {/* 1. Outer Dark Smoke Ash clouds */}
-                <div style={{
-                  position: 'absolute',
-                  inset: '0px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(30,41,59,0.9) 30%, rgba(15,23,42,0.95) 65%, rgba(0,0,0,0) 80%)',
-                  boxShadow: '0 0 40px rgba(15,23,42,0.8)',
-                  opacity: 0.95
-                }} />
-
-                {/* 2. Middle Fireball Layer */}
-                <div style={{
-                  position: 'absolute',
-                  inset: '40px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle, rgba(253,224,71,0.95) 10%, rgba(249,115,22,0.9) 50%, rgba(120,41,12,0.5) 80%)',
-                  boxShadow: '0 0 50px rgba(249,115,22,0.9), inset 0 0 30px rgba(254,240,138,0.5)',
-                  opacity: 0.9
-                }} />
-
-                {/* 3. Central Boiling Plasma Core */}
-                <div style={{
-                  position: 'absolute',
-                  inset: '90px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle, #ffffff 0%, #fef08a 40%, #ea580c 100%)',
-                  boxShadow: '0 0 60px #ffffff, 0 0 100px #facc15',
-                  animation: 'central-fire-core 2.5s linear infinite alternate'
-                }} />
-
-                {/* 4. Condensation Pressure Vapor Ring */}
-                <div style={{
-                  position: 'absolute',
-                  top: '40%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '420px',
-                  height: '45px',
-                  borderRadius: '50%',
-                  border: '5px solid rgba(255, 255, 255, 0.4)',
-                  background: 'radial-gradient(ellipse, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 70%)',
-                  boxShadow: '0 0 25px rgba(255,255,255,0.5)',
-                  opacity: 0.75,
-                  filter: 'blur(3px)'
-                }} />
-              </div>
-            )}
-
-            {/* Floating Experience points badge */}
-            {gainedXpAnim && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                top: '25%',
-                transform: 'translateX(-50%)',
-                background: 'linear-gradient(to right, #10b981, #047857)',
-                border: '2px solid #fef08a',
-                borderRadius: '12px',
-                padding: '10px 24px',
-                color: '#fff',
-                fontWeight: '900',
-                fontSize: '22px',
-                zIndex: 1000,
-                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.4)',
-                animation: 'float-xp 3.5s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards',
-                pointerEvents: 'none',
-                direction: 'rtl',
-                fontFamily: 'Cairo, sans-serif'
-              }}>
-                🧪 XP +2,500
               </div>
             )}
 
             {/* Large Rocket Flying Animation */}
             {isLargeRocketActive && (
-              <div style={{
-                position: 'absolute',
-                bottom: '-100px',
-                right: '10%',
-                zIndex: 999,
-                animation: 'fly-rocket 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
-                pointerEvents: 'none'
-              }}>
-                <img 
-                  src={WEAPON_LARGE_MISSILE_ICON} 
-                  alt="صاروخ كبير طائر" 
-                  referrerPolicy="no-referrer"
-                  style={{ width: '84px', height: '84px', objectFit: 'contain', filter: 'drop-shadow(0 0 16px rgba(239, 68, 68, 0.8))' }} 
-                />
+              <div 
+                style={{
+                  position: 'absolute',
+                  zIndex: 9999,
+                  pointerEvents: 'none',
+                  animation: 'fly-rocket-targeted 1.25s cubic-bezier(0.18, 0.72, 0.35, 1) forwards',
+                  '--rocket-target-x': rocketTargetPos.l,
+                  '--rocket-target-y': rocketTargetPos.t,
+                } as React.CSSProperties}
+              >
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img 
+                    src={WEAPON_LARGE_MISSILE_ICON} 
+                    alt="صاروخ كبير طائر" 
+                    referrerPolicy="no-referrer"
+                    style={{ 
+                      width: '78px', 
+                      height: '78px', 
+                      objectFit: 'contain', 
+                      filter: 'drop-shadow(0 0 16px rgba(239, 68, 68, 0.95)) drop-shadow(0 4px 10px rgba(0,0,0,0.8))' 
+                    }} 
+                  />
+                  {/* Thruster exhaust flame behind the missile */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-14px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '22px',
+                    height: '36px',
+                    borderRadius: '50% 50% 20% 20%',
+                    background: 'radial-gradient(ellipse at top, #ffffff 10%, #fef08a 35%, #f97316 70%, transparent 100%)',
+                    animation: 'thruster-flame 0.12s infinite alternate',
+                    filter: 'drop-shadow(0 0 10px #f97316)',
+                    zIndex: -1
+                  }} />
+                </div>
               </div>
             )}
 
-            {/* Large Rocket Explosion Overlay */}
-            {showLargeRocketExplosion && (
-              <div style={{
-                position: 'absolute',
-                left: '50%',
-                top: '55%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 998,
-                fontSize: '120px',
-                animation: 'zoom-in-out 1.2s ease-out forwards',
-                pointerEvents: 'none',
-                textAlign: 'center'
-              }}>
-                💥
-              </div>
+            {/* Small Rocket Comic Cloud Explosion Exactly Matching User Reference Video */}
+            {showSmallRocketExplosion && (
+              <SmallRocketExplosion
+                x={rocketTargetPos.l}
+                y={rocketTargetPos.t}
+                damage={800}
+                onComplete={() => setShowSmallRocketExplosion(false)}
+              />
             )}
 
-            {/* Large Rocket Damage Text */}
+            {/* Realistic Multi-Cloud Comic Explosion Exactly Matching User Reference Video */}
             {showLargeRocketExplosion && (
-              <div style={{
-                position: 'absolute',
-                top: '40%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                background: 'rgba(239, 68, 68, 0.95)',
-                border: '3px solid #fbbf24',
-                borderRadius: '12px',
-                padding: '12px 24px',
-                color: '#fff',
-                fontSize: '22px',
-                fontWeight: 'bold',
-                zIndex: 9999,
-                animation: 'zoom-in-out 1.5s ease-out forwards',
-                fontFamily: 'Cairo, sans-serif'
-              }}>
-                💥 صاروخ كبير - 18,000 ضرر
-              </div>
+              <LargeRocketExplosion
+                x={rocketTargetPos.l}
+                y={rocketTargetPos.t}
+                damage={18000}
+                onComplete={() => setShowLargeRocketExplosion(false)}
+              />
             )}
 
             {/* Ad Bomb Smoke Explosion */}
@@ -12830,7 +13065,7 @@ export default function App() {
           )}
 
           {/* ----------------- VISITED SHIP DETAILS MODAL (بوابة خيارات السفينة المحددة) ----------------- */}
-          {selectedVisitedShip && (
+          {selectedVisitedShip && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -12913,7 +13148,6 @@ export default function App() {
                     {!inspectedPlayer.portDestroyed && (
                       <button
                         onClick={() => {
-                          setSelectedVisitedShip(null);
                           setShowWeaponSelector(true);
                         }}
                         style={{
@@ -12936,6 +13170,69 @@ export default function App() {
                       >
                         🚀 هجوم وقصف الميناء بالأسلحة
                       </button>
+                    )}
+
+                    {/* Post-Attack / Destroyed Port Actions */}
+                    {Boolean(inspectedPlayer.portDestroyed || (typeof selectedVisitedShip.heart === 'number' && selectedVisitedShip.heart <= 0)) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                        <div style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid #ef4444',
+                          color: '#fca5a5',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}>
+                          🔥 تم إحراق وتدمير الأسطول والميناء بنجاح!
+                        </div>
+                        <button
+                          onClick={() => {
+                            setSelectedLootCard(null);
+                            setLootResultText('');
+                            setShowLootSelector(true);
+                          }}
+                          style={{
+                            background: 'linear-gradient(to bottom, #eab308, #ca8a04)',
+                            border: '1.5px solid #fef08a',
+                            color: '#000',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            fontWeight: '900',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 15px rgba(234, 179, 8, 0.45)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          🪙 سرقة ونهب حطام الأسطول
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowGlobalMessageModal(true);
+                          }}
+                          style={{
+                            background: 'linear-gradient(to bottom, #6366f1, #4f46e5)',
+                            border: '1.5px solid #a5b4fc',
+                            color: '#fff',
+                            borderRadius: '8px',
+                            padding: '10px',
+                            fontWeight: 'bold',
+                            fontSize: '13px',
+                            cursor: 'pointer',
+                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          📢 بث رسالة عالمية عن النصر
+                        </button>
+                      </div>
                     )}
 
                     {/* Actions Grid */}
@@ -13378,6 +13675,15 @@ export default function App() {
                                             };
                                           });
 
+                                          const targetUid = inspectedPlayer.userId || inspectedPlayer.id;
+                                          if (targetUid && db) {
+                                            updateDoc(doc(db, 'users', targetUid), {
+                                              ships: updatedTargetShips,
+                                              portDestroyed: false,
+                                              updatedAt: new Date().toISOString()
+                                            }).catch((err) => console.warn("Friend repair doc update failed:", err));
+                                          }
+
                                           await createHarborEvent(inspectedPlayer.userId, 'REPAIR', {
                                             healAmount: 999999
                                           });
@@ -13429,6 +13735,16 @@ export default function App() {
                                             }
                                             return s;
                                           });
+
+                                          const targetUid = inspectedPlayer.userId || inspectedPlayer.id;
+                                          const anyShipAlive = updatedTargetShips.some((s: any) => typeof s.heart === 'number' && s.heart > 0);
+                                          if (targetUid && db) {
+                                            updateDoc(doc(db, 'users', targetUid), {
+                                              ships: updatedTargetShips,
+                                              portDestroyed: anyShipAlive ? false : Boolean(inspectedPlayer.portDestroyed),
+                                              updatedAt: new Date().toISOString()
+                                            }).catch((err) => console.warn("Friend ship repair doc update failed:", err));
+                                          }
 
                                           await createHarborEvent(inspectedPlayer.userId, 'REPAIR', {
                                             healAmount,
@@ -13507,7 +13823,7 @@ export default function App() {
           )}
 
           {/* Weapon Selector Modal */}
-          {showWeaponSelector && (
+          {showWeaponSelector && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -13673,7 +13989,7 @@ export default function App() {
                         return;
                       }
                       setShowWeaponSelector(false);
-                      handleLaunchLargeRocket();
+                      handleLaunchLargeRocket(selectedVisitedShip);
                     }}
                     style={{
                       background: 'rgba(24, 24, 27, 0.6)',
@@ -13890,7 +14206,7 @@ export default function App() {
           )}
 
           {/* Global Message Modal */}
-          {showGlobalMessageModal && (
+          {showGlobalMessageModal && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -14143,7 +14459,7 @@ export default function App() {
           )}
 
           {/* Loot Selector Modal */}
-          {showLootSelector && (
+          {showLootSelector && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -14608,6 +14924,329 @@ export default function App() {
         </div>
       )}
 
+      {/* ----------------- SHIP REPAIR & RESTORATION MODAL ----------------- */}
+      {repairModalShip && (
+        <div 
+          id="ship-repair-modal" 
+          className="modal" 
+          style={{ 
+            display: 'block', 
+            maxWidth: '460px', 
+            width: '92%', 
+            padding: '16px', 
+            background: 'rgba(18, 14, 10, 0.98)', 
+            border: '2px solid #ca8a04', 
+            borderRadius: '16px', 
+            boxShadow: '0 12px 40px rgba(0,0,0,0.9), 0 0 20px rgba(202, 138, 4, 0.3)',
+            direction: 'rtl',
+            fontFamily: '"Cairo", sans-serif',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #332715', paddingBottom: '10px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '24px' }}>🛠️</span>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', color: '#facc15', fontWeight: '900' }}>ورشة صيانة وترميم السفن</h3>
+                <div style={{ fontSize: '11px', color: '#a8a29e' }}>إصلاح أضرار المعارك واستعادة جاهزية الأسطول</div>
+              </div>
+            </div>
+            <button 
+              onClick={() => setRepairModalShip(null)}
+              style={{ background: 'transparent', border: 'none', color: '#a8a29e', fontSize: '20px', cursor: 'pointer', padding: '4px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Ship Details Card */}
+          {(() => {
+            const ship = ships.find(s => s.id === repairModalShip.id) || repairModalShip;
+            const maxH = ship.maxHeart || ((ship.level || 0) * 1000) + 10000;
+            const curH = typeof ship.heart === 'number' ? ship.heart : maxH;
+            const isDestroyed = curH <= 0 || portDestroyed;
+            const healthPct = Math.min(100, Math.max(0, Math.round((curH / maxH) * 100)));
+
+            return (
+              <div>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '12px', 
+                  background: 'rgba(30, 24, 18, 0.9)', 
+                  border: isDestroyed ? '1.5px solid #ef4444' : '1px solid #78350f', 
+                  borderRadius: '12px', 
+                  padding: '10px 14px', 
+                  marginBottom: '14px' 
+                }}>
+                  <div style={{ width: '60px', height: '50px', position: 'relative', flexShrink: 0 }}>
+                    <ShipImage level={typeof ship.level === 'number' ? ship.level : 0} width={60} plain={true} fill={true} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '900', color: '#fde047' }}>{ship.name || 'سفينة الأسطول'}</span>
+                      <span style={{ 
+                        fontSize: '10px', 
+                        padding: '2px 8px', 
+                        borderRadius: '8px', 
+                        fontWeight: 'bold',
+                        background: isDestroyed ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.2)',
+                        color: isDestroyed ? '#fca5a5' : '#86efac',
+                        border: isDestroyed ? '1px solid #ef4444' : '1px solid #22c55e'
+                      }}>
+                        {isDestroyed ? '🔥 مدمّرة بالكامل' : curH < maxH ? '⚠️ متضررة' : '✅ سليمة'}
+                      </span>
+                    </div>
+
+                    {/* Health bar */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#e5e7eb', marginBottom: '3px' }}>
+                      <span>نقاط الهيكل (HP):</span>
+                      <span style={{ fontWeight: 'bold', color: isDestroyed ? '#ef4444' : healthPct < 50 ? '#f59e0b' : '#10b981' }}>
+                        {curH.toLocaleString()} / {maxH.toLocaleString()} ({healthPct}%)
+                      </span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: '#262626', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ 
+                        width: `${healthPct}%`, 
+                        height: '100%', 
+                        background: isDestroyed ? '#ef4444' : healthPct < 50 ? 'linear-gradient(90deg, #ef4444, #f59e0b)' : 'linear-gradient(90deg, #10b981, #059669)',
+                        transition: 'width 0.4s ease'
+                      }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 1: Crew services / repairers from warehouse */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#facc15', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>📦</span>
+                    <span>طواقم الصيانة من مستودعك:</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+                    {/* Small Repairer */}
+                    <div style={{ 
+                      background: 'rgba(25, 20, 15, 0.85)', 
+                      border: '1px solid #443425', 
+                      borderRadius: '10px', 
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <img src={FIXER_SMALL_ICON} alt="مصلح صغير" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#fef08a' }}>مصلح صغير</div>
+                          <div style={{ fontSize: '9.5px', color: '#a8a29e' }}>+500 HP</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#d1d5db' }}>لديك: <strong style={{ color: (crewServices.repairer_small || 0) > 0 ? '#4ade80' : '#ef4444' }}>{crewServices.repairer_small || 0}</strong></span>
+                        <button 
+                          disabled={(crewServices.repairer_small || 0) <= 0 || curH >= maxH}
+                          onClick={() => handleRepairShip(ship.id, 'small')}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: ((crewServices.repairer_small || 0) > 0 && curH < maxH) ? 'pointer' : 'not-allowed',
+                            background: ((crewServices.repairer_small || 0) > 0 && curH < maxH) ? '#16a34a' : '#4b5563',
+                            color: '#fff'
+                          }}
+                        >
+                          استخدام
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Medium Repairer */}
+                    <div style={{ 
+                      background: 'rgba(25, 20, 15, 0.85)', 
+                      border: '1px solid #443425', 
+                      borderRadius: '10px', 
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <img src={FIXER_MEDIUM_ICON} alt="مصلح وسط" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#fef08a' }}>مصلح وسط</div>
+                          <div style={{ fontSize: '9.5px', color: '#a8a29e' }}>+1,000 HP (أو 50%)</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#d1d5db' }}>لديك: <strong style={{ color: (crewServices.repairer_medium || 0) > 0 ? '#4ade80' : '#ef4444' }}>{crewServices.repairer_medium || 0}</strong></span>
+                        <button 
+                          disabled={(crewServices.repairer_medium || 0) <= 0 || curH >= maxH}
+                          onClick={() => handleRepairShip(ship.id, 'medium')}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: ((crewServices.repairer_medium || 0) > 0 && curH < maxH) ? 'pointer' : 'not-allowed',
+                            background: ((crewServices.repairer_medium || 0) > 0 && curH < maxH) ? '#16a34a' : '#4b5563',
+                            color: '#fff'
+                          }}
+                        >
+                          استخدام
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Large Repairer */}
+                    <div style={{ 
+                      background: 'rgba(25, 20, 15, 0.85)', 
+                      border: '1px solid #443425', 
+                      borderRadius: '10px', 
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <img src={FIXER_LARGE_ICON} alt="مصلح كبير" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#fef08a' }}>مصلح كبير</div>
+                          <div style={{ fontSize: '9.5px', color: '#a8a29e' }}>100% إصلاح كامل</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#d1d5db' }}>لديك: <strong style={{ color: (crewServices.repairer_large || 0) > 0 ? '#4ade80' : '#ef4444' }}>{crewServices.repairer_large || 0}</strong></span>
+                        <button 
+                          disabled={(crewServices.repairer_large || 0) <= 0 || curH >= maxH}
+                          onClick={() => handleRepairShip(ship.id, 'large')}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: ((crewServices.repairer_large || 0) > 0 && curH < maxH) ? 'pointer' : 'not-allowed',
+                            background: ((crewServices.repairer_large || 0) > 0 && curH < maxH) ? '#16a34a' : '#4b5563',
+                            color: '#fff'
+                          }}
+                        >
+                          استخدام
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Legendary Repairer */}
+                    <div style={{ 
+                      background: 'rgba(25, 20, 15, 0.85)', 
+                      border: '1px solid #443425', 
+                      borderRadius: '10px', 
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <img src={FIXER_LEGENDARY_ICON} alt="مصلح أسطوري" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+                        <div>
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#fef08a' }}>مصلح أسطوري</div>
+                          <div style={{ fontSize: '9.5px', color: '#a8a29e' }}>100% كامل الأسطول</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#d1d5db' }}>لديك: <strong style={{ color: (crewServices.repairer_legendary || 0) > 0 ? '#4ade80' : '#ef4444' }}>{crewServices.repairer_legendary || 0}</strong></span>
+                        <button 
+                          disabled={(crewServices.repairer_legendary || 0) <= 0}
+                          onClick={() => handleRepairShip(ship.id, 'legendary')}
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            borderRadius: '6px',
+                            border: 'none',
+                            cursor: (crewServices.repairer_legendary || 0) > 0 ? 'pointer' : 'not-allowed',
+                            background: (crewServices.repairer_legendary || 0) > 0 ? '#eab308' : '#4b5563',
+                            color: (crewServices.repairer_legendary || 0) > 0 ? '#000' : '#fff'
+                          }}
+                        >
+                          استخدام
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 2: Instant Harbor Workshop Options */}
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#facc15', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>⚡</span>
+                    <span>الصيانة الفورية بورشة الميناء:</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {/* Gold Repair */}
+                    <button
+                      disabled={curH >= maxH || gold < 500}
+                      onClick={() => handleRepairShip(ship.id, 'gold')}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '10px 14px',
+                        background: (curH < maxH && gold >= 500) ? 'linear-gradient(135deg, #1e293b, #0f172a)' : 'rgba(30, 25, 20, 0.6)',
+                        border: (curH < maxH && gold >= 500) ? '1px solid #facc15' : '1px solid #4b5563',
+                        borderRadius: '10px',
+                        cursor: (curH < maxH && gold >= 500) ? 'pointer' : 'not-allowed',
+                        color: '#fff'
+                      }}
+                    >
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#fde047' }}>إصلاح وترميم هذه السفينة بالكامل 100%</div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>استعادة كامل نقاط الصحة وإطفاء النيران فوراً</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#ca8a04', color: '#000', padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold' }}>
+                        <span>🪙 500</span>
+                        <span>ذهب</span>
+                      </div>
+                    </button>
+
+                    {/* Gems Fleet Repair */}
+                    <button
+                      disabled={gems < 10}
+                      onClick={() => handleRepairShip(ship.id, 'gems')}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '10px 14px',
+                        background: gems >= 10 ? 'linear-gradient(135deg, #1e1b4b, #312e81)' : 'rgba(30, 25, 20, 0.6)',
+                        border: gems >= 10 ? '1px solid #818cf8' : '1px solid #4b5563',
+                        borderRadius: '10px',
+                        cursor: gems >= 10 ? 'pointer' : 'not-allowed',
+                        color: '#fff'
+                      }}
+                    >
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#c7d2fe' }}>ترميم كامل أسطول السفن دفعة واحدة 100%</div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>صيانة شاملة لجميع السفن وإعادة جاهزية الإبحار</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#4f46e5', color: '#fff', padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold' }}>
+                        <span>💎 10</span>
+                        <span>جواهر</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
       {/* ----------------- CONFIRM SELL MODAL ----------------- */}
       {confirmModal && (
         <div id="confirm-modal" className="modal" style={{ display: 'block' }}>
@@ -14803,6 +15442,33 @@ export default function App() {
                 >
                   <div className="menu-icon">{activeShip.autoFishingPaused ? '▶️' : '⏸️'}</div>
                   {activeShip.autoFishingPaused ? 'تشغيل الآلي' : 'إيقاف الآلي'}
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Repair / Maintenance Button in Action Menu */}
+          {(() => {
+            const activeShip = ships.find(s => s.id === (currentShipId || menu.shipId));
+            const maxH = activeShip?.maxHeart || ((activeShip?.level || 0) * 1000) + 10000;
+            const curH = typeof activeShip?.heart === 'number' ? activeShip.heart : maxH;
+            const isDamaged = activeShip && (portDestroyed || curH < maxH);
+            if (isDamaged) {
+              const isDestroyed = portDestroyed || curH <= 0;
+              return (
+                <div 
+                  className="menu-btn" 
+                  onClick={() => act('repair')}
+                  style={{
+                    background: isDestroyed ? 'linear-gradient(135deg, #b91c1c, #991b1b)' : 'linear-gradient(135deg, #059669, #047857)',
+                    color: '#fff',
+                    border: isDestroyed ? '1px solid #fca5a5' : '1px solid #6ee7b7'
+                  }}
+                  title="صيانة وترميم هيكل السفينة"
+                >
+                  <div className="menu-icon">🔧</div>
+                  {isDestroyed ? 'إصلاح وترميم' : 'صيانة'}
                 </div>
               );
             }
@@ -15060,6 +15726,64 @@ export default function App() {
             >
               <span>🏗️</span>
               <span>إعادة إعمار الميناء وترميم الأسطول (💎 200 جوهرة)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Partial Ship Destruction Alert Banner (when port is intact but ships are destroyed/damaged) */}
+      {!portDestroyed && ships.some(s => s.exists && typeof s.heart === 'number' && s.heart <= 0) && activeTab === 'harbor' && (
+        <div style={{
+          position: 'fixed',
+          top: '75px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 40,
+          background: 'rgba(28, 15, 10, 0.96)',
+          border: '2px solid #f97316',
+          borderRadius: '16px',
+          padding: '12px 18px',
+          width: '92%',
+          maxWidth: '460px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.9), 0 0 20px rgba(249, 115, 22, 0.4)',
+          textAlign: 'center',
+          fontFamily: '"Cairo", sans-serif',
+          direction: 'rtl',
+          animation: 'pulse 2.2s infinite'
+        }}>
+          <div style={{ fontSize: '15px', fontWeight: '900', color: '#fed7aa', marginBottom: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <span>⚠️</span>
+            <span>تنبيه عاجل: تعرضت بعض سفنك للتدمير والاحتراق!</span>
+            <span>🔥</span>
+          </div>
+          <div style={{ fontSize: '11.5px', color: '#cbd5e1', marginBottom: '10px', lineHeight: '1.5' }}>
+            استهدفت نيران المعارك هيكل سفينتك حتى تفحم وعجز عن الإبحار والصيد. توجه لصيانتها وترميمها فوراً.
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <button
+              onClick={() => {
+                const destroyedShip = ships.find(s => s.exists && typeof s.heart === 'number' && s.heart <= 0);
+                if (destroyedShip) {
+                  setRepairModalShip(destroyedShip);
+                }
+              }}
+              style={{
+                background: 'linear-gradient(to bottom, #16a34a, #15803d)',
+                color: '#fff',
+                border: '1.5px solid #86efac',
+                borderRadius: '10px',
+                padding: '8px 18px',
+                fontWeight: '900',
+                fontSize: '12px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 15px rgba(22, 163, 74, 0.4)'
+              }}
+            >
+              <span>🔧</span>
+              <span>فتح ورشة صيانة وترميم السفن</span>
             </button>
           </div>
         </div>

@@ -3,7 +3,7 @@
   "appId": "1:865058774465:web:ef1a6855e883886ab92340",
   "apiKey": "AIzaSyANi1hKBMLRQk2keakcLjLv9PsQAxJTQN8",
   "authDomain": "kingofdeep.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-fainaly-d3f4d71f-d0f5-4788-95ce-5e5256460f5b",
+  "firestoreDatabaseId": "(default)",
   "storageBucket": "kingofdeep.firebasestorage.app",
   "messagingSenderId": "865058774465",
   "measurementId": "G-MSXXJSVC15",

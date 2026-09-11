@@ -15,11 +15,11 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // 2. User Profiles - strictly self-managed mutations, public read for rankings & fleet view
+    // 2. User Profiles - public read for rankings & fleet view, authenticated mutations for profile updates, multiplayer attacks, ship damage, and repairs
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId) || (isSignedIn() && request.resource.data.userId == request.auth.uid);
-      allow update: if isOwner(userId) || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update: if isSignedIn();
       allow delete: if isOwner(userId) || (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
@@ -52,20 +52,7 @@ service cloud.firestore {
 
     // 5. Harbor Events - multiplayer attacks, rockets, steals, repairs, donations
     match /harborEvents/{eventId} {
-      allow read: if isSignedIn() && (
-        resource.data.attackerId == request.auth.uid || 
-        resource.data.defenderId == request.auth.uid
-      );
-      allow create: if isSignedIn() 
-        && request.resource.data.attackerId == request.auth.uid;
-      allow update: if isSignedIn() && (
-        resource.data.defenderId == request.auth.uid || 
-        resource.data.attackerId == request.auth.uid
-      );
-      allow delete: if isSignedIn() && (
-        resource.data.defenderId == request.auth.uid || 
-        resource.data.attackerId == request.auth.uid
-      );
+      allow read, create, update, delete: if isSignedIn();
     }
 
     // 6. Tribes / Alliances

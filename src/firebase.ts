@@ -1,35 +1,44 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore, getFirestore, doc } from 'firebase/firestore';
+import firebaseAppletConfig from '../firebase-applet-config.json';
 
-// Explicitly hardcoded Firebase client credentials strictly for project 'kingofdeep'
-// Completely bypassing any Google AI Studio environment variables, secondary drivers, or Cloud SQL bindings
 export const firebaseConfig = {
-  apiKey: "AIzaSyANi1hKBMLRQk2keakcLjLv9PsQAxJTQN8",
-  authDomain: "kingofdeep.firebaseapp.com",
-  projectId: "kingofdeep",
-  storageBucket: "kingofdeep.firebasestorage.app",
-  messagingSenderId: "865058774465",
-  appId: "1:865058774465:web:083d2a7ee22f2d61b92340",
-  measurementId: "G-41F5PSQ7LR",
-  firestoreDatabaseId: "(default)",
-  recaptchaSiteKey: ""
+  apiKey: firebaseAppletConfig.apiKey || "AIzaSyANi1hKBMLRQk2keakcLjLv9PsQAxJTQN8",
+  authDomain: firebaseAppletConfig.authDomain || "kingofdeep.firebaseapp.com",
+  projectId: firebaseAppletConfig.projectId || "kingofdeep",
+  storageBucket: firebaseAppletConfig.storageBucket || "kingofdeep.firebasestorage.app",
+  messagingSenderId: firebaseAppletConfig.messagingSenderId || "865058774465",
+  appId: firebaseAppletConfig.appId || "1:865058774465:web:083d2a7ee22f2d61b92340",
+  measurementId: firebaseAppletConfig.measurementId || "G-MSXXJSVC15",
+  firestoreDatabaseId: firebaseAppletConfig.firestoreDatabaseId || "(default)",
+  recaptchaSiteKey: firebaseAppletConfig.recaptchaSiteKey || ""
 };
 
-// Initialize Firebase App only once with explicit 'kingofdeep' config
+// Initialize Firebase App only once
 export const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Auth and Cloud Firestore instances strictly once
 export const auth = getAuth(app);
 
-// Initialize Firestore with auto-detect long-polling and explicit databaseId per SKILL.md
-initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId || '(default)');
+const customDbId = (firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)') 
+  ? firebaseConfig.firestoreDatabaseId 
+  : undefined;
 
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)'); /* CRITICAL: The app will break without this line */
+// Initialize Firestore with auto-detect long-polling
+if (customDbId) {
+  initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  }, customDbId);
+} else {
+  initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  });
+}
 
-console.log("[FIREBASE] Initialized Firebase Auth and Cloud Firestore strictly with hardcoded 'kingofdeep' configuration.");
+export const db = customDbId ? getFirestore(app, customDbId) : getFirestore(app); /* CRITICAL: The app will break without this line */
+
+console.log("[FIREBASE] Initialized Firebase Auth and Cloud Firestore with database:", customDbId || '(default)');
 
 // Graceful connection test without throwing unhandled exceptions
 export async function testConnection() {
