@@ -4158,6 +4158,57 @@ export default function App() {
     });
   };
 
+  // --- Helper to calculate catch rewards for a single ship ---
+  const calculateShipCatch = useCallback((selectedShip: ShipState) => {
+    const shipCrew = selectedShip.assignedCrew || [];
+    const isNetUpgraded = selectedShip.hasNetUpgrade;
+    const crewPowerBonus = selectedShip.crewPower || 0;
+    const isLuckActive = shipCrew.includes('luck');
+    const isGuidedActive = shipCrew.includes('guide');
+
+    const capacityLvl = selectedShip.capacityLevel || 1;
+    const capacityMultiplier = 1 + (capacityLvl - 1) * 0.15;
+    const cargo = Math.floor((selectedShip.cargo || 80) * capacityMultiplier);
+    const shipFishTypes = selectedShip.fishTypes && selectedShip.fishTypes.length > 0 
+      ? selectedShip.fishTypes 
+      : ['السردين'];
+
+    // 🧭 مرشد السفينة: يركز الصيد على أفضل نوع سمك تصطاده السفينة
+    const randomFishName = isGuidedActive 
+      ? shipFishTypes[shipFishTypes.length - 1] 
+      : shipFishTypes[Math.floor(Math.random() * shipFishTypes.length)];
+    
+    const fishInfo = FISH_REWARD_DATA[randomFishName] || { 
+      fullName: `${randomFishName} 🐟`, 
+      valPerFish: 1,
+      emoji: '🐟'
+    };
+
+    const baseAmount = Math.max(20, Math.floor(cargo * (0.25 + Math.random() * 0.35)));
+    let totalAmount = (isNetUpgraded ? baseAmount * 2 : baseAmount) + crewPowerBonus;
+    if (pirateClass === 'صياد البحار') {
+      totalAmount = Math.floor(totalAmount * 1.15);
+    }
+
+    // 🍀 الحظ السعيد: مضاعفة صيد السفينة 2x بنسبة 100%
+    if (isLuckActive) {
+      totalAmount = totalAmount * 2;
+    }
+
+    let expReward = Math.floor(5 + Math.random() * 5);
+    if (isGuidedActive) {
+      expReward = expReward * 2;
+    }
+
+    return {
+      fishInfo,
+      totalAmount,
+      expReward,
+      isLuckActive,
+      isGuidedActive
+    };
+  }, [pirateClass]);
+
   // --- Dedicated Single-Ship Action Handlers (supports manual & autonomous Golden Hunter) ---
   const startShipFishing = (targetShipId: string, isAuto = false) => {
     if (!targetShipId) return;
@@ -4315,47 +4366,12 @@ export default function App() {
           })
         );
 
-        const capacityLvl = selectedShip.capacityLevel || 1;
-        const capacityMultiplier = 1 + (capacityLvl - 1) * 0.15;
-        const cargo = Math.floor((selectedShip.cargo || 80) * capacityMultiplier);
-        const shipFishTypes = selectedShip.fishTypes && selectedShip.fishTypes.length > 0 
-          ? selectedShip.fishTypes 
-          : ['السردين'];
-
-        // 🧭 مرشد السفينة: يركز الصيد على أفضل نوع سمك تصطاده السفينة
-        const randomFishName = isGuidedActive 
-          ? shipFishTypes[shipFishTypes.length - 1] 
-          : shipFishTypes[Math.floor(Math.random() * shipFishTypes.length)];
-        
-        const fishInfo = FISH_REWARD_DATA[randomFishName] || { 
-          fullName: `${randomFishName} 🐟`, 
-          valPerFish: 1,
-          emoji: '🐟'
-        };
-
-        const baseAmount = Math.max(20, Math.floor(cargo * (0.25 + Math.random() * 0.35)));
-        let totalAmount = (isNetUpgraded ? baseAmount * 2 : baseAmount) + crewPowerBonus;
-        if (pirateClass === 'صياد البحار') {
-          totalAmount = Math.floor(totalAmount * 1.15);
-        }
-
-        // 🍀 الحظ السعيد: مضاعفة صيد السفينة 2x بنسبة 100% (مثال: صيد 2,000 يصبح 4,000)
-        if (isLuckActive) {
-          totalAmount = totalAmount * 2;
-        }
-        
-        let storageMultiplier = 1 + (fishStorageLevel - 1) * 0.1;
-        if (isLuckActive) {
-          storageMultiplier += 0.20; 
-        }
-        if (isSailorActive) {
-          storageMultiplier += 0.15; 
-        }
-
-        let expReward = Math.floor(5 + Math.random() * 5);
-        if (isGuidedActive) {
-          expReward = expReward * 2;
-        }
+        const catchData = calculateShipCatch(selectedShip);
+        const fishInfo = catchData.fishInfo;
+        const totalAmount = catchData.totalAmount;
+        const expReward = catchData.expReward;
+        const isLuckActive = catchData.isLuckActive;
+        const isGuidedActive = catchData.isGuidedActive;
 
         // Add all caught fish directly to fish inventory without any automatic selling
         if (totalAmount > 0) {
@@ -4531,56 +4547,239 @@ export default function App() {
     };
   }, [processOfflineAutoHarvest]);
 
-  // --- Autonomous 24/7 Fishing & Collecting Engine for Golden Hunter (الصياد الذهبي) ---
+  // --- Synchronized Global Fleet Autonomous Fishing & Collecting Engine ---
+  // بدلاً من حساب التقدم (progress) لكل سفينة بشكل منفصل بناءً على وقت انطلاقها المحلي،
+  // يتم توحيد حساب التقدم بحيث تعتمد جميع السفن على نفس النسبة المئوية أو التوقيت العام:
+  // const globalProgress = (currentTime - startTimestamp) / totalDuration;
+  // وتتطابق نسبة تقدم كل سفينة تماماً مع القيمة العامة لضمان التزامن الكامل بين جميع السفن.
+
+  const FLEET_SAIL_OUT_MS = 780;
+  const FLEET_FLIP_MS = 220;
+  const FLEET_RETURN_MS = 780;
+  const FLEET_DOCK_PAUSE_MS = 700;
+
+  const shipsRef = useRef(ships);
   useEffect(() => {
-    const autoTimer = setInterval(() => {
-      // Record heartbeat for offline catch-up calculation
-      localStorage.setItem('pirate_last_active_time', String(Date.now()));
+    shipsRef.current = ships;
+  }, [ships]);
 
-      ships.forEach(ship => {
-        if (!ship.exists) return;
-        // Check if auto-fishing is paused for this ship
-        if (ship.autoFishingPaused) return;
+  const portDestroyedRef = useRef(portDestroyed);
+  useEffect(() => {
+    portDestroyedRef.current = portDestroyed;
+  }, [portDestroyed]);
 
-        const assigned = ship.assignedCrew || [];
-        // Only run autonomous fishing if THIS specific ship explicitly has Golden Hunter assigned to it!
-        const hasGoldenHunter = assigned.includes('golden_hunter') || assigned.includes('gold_fisher');
-        
-        if (hasGoldenHunter) {
-          // Unfreeze watchdog: If a ship has been moving for over 3.0s (e.g. after refresh/tab throttle), unfreeze it!
-          if (ship.moving) {
-            const moveStarted = ship.lastMoveTime || 0;
-            if (!moveStarted || Date.now() - moveStarted > 3000) {
-              setShips(prev => prev.map(s => {
-                if (s.id === ship.id) {
+  const fleetCycleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const runSynchronizedFleetCycle = () => {
+      if (isCancelled) return;
+
+      // Identify all eligible autonomous ships with Golden Hunter
+      const activeAutoShips = shipsRef.current.filter(s =>
+        s.exists &&
+        !s.autoFishingPaused &&
+        (!portDestroyedRef.current && (typeof s.heart !== 'number' || s.heart > 0)) &&
+        (s.assignedCrew?.includes('golden_hunter') || s.assignedCrew?.includes('gold_fisher'))
+      );
+
+      if (activeAutoShips.length === 0) {
+        fleetCycleTimeoutRef.current = setTimeout(runSynchronizedFleetCycle, 400);
+        return;
+      }
+
+      const activeIds = activeAutoShips.map(s => s.id);
+
+      // Verify that all active ships are at dock and idle. If any was left moving or fishing from a past state, align all to dock first!
+      const anyMisaligned = activeAutoShips.some(s => s.status !== 'docked' || s.moving);
+      if (anyMisaligned) {
+        setShips(prev =>
+          prev.map(s => {
+            if (activeIds.includes(s.id)) {
+              return {
+                ...s,
+                status: 'docked',
+                moving: false,
+                lastMoveTime: 0,
+                scaleX: 1,
+                progress: 0,
+                left: docks[s.id]?.l || '45%',
+                top: docks[s.id]?.t || '41%',
+                transitionDuration: '0.2s'
+              };
+            }
+            return s;
+          })
+        );
+        fleetCycleTimeoutRef.current = setTimeout(runSynchronizedFleetCycle, 260);
+        return;
+      }
+
+      const currentTime = Date.now();
+      const startTimestamp = currentTime;
+      const totalDuration = FLEET_SAIL_OUT_MS;
+
+      // Record heartbeat for offline catch-up
+      localStorage.setItem('pirate_last_active_time', String(currentTime));
+
+      // حساب التقدم الموحد لجميع السفن معاً:
+      const globalProgress = (currentTime - startTimestamp) / totalDuration;
+
+      updateQuestProgress('q1', activeIds.length);
+
+      // 1. Unified Sail Out: All ships embark simultaneously with identical timing & progress
+      setShips(prev =>
+        prev.map(s => {
+          if (activeIds.includes(s.id)) {
+            return {
+              ...s,
+              scaleX: 1,
+              moving: true,
+              lastMoveTime: startTimestamp,
+              status: 'fishing',
+              // تطابق نسبة تقدم كل سفينة مع القيمة العامة لضمان التزامن
+              progress: Math.min(1, globalProgress),
+              left: fishSpots[s.id]?.l || '70%',
+              top: fishSpots[s.id]?.t || '41%',
+              transitionDuration: `${FLEET_SAIL_OUT_MS}ms`
+            };
+          }
+          return s;
+        })
+      );
+
+      // 2. Synchronized Fishing Spot Arrival & Turn (الوصول والالتفاف المتزامن لجميع السفن)
+      fleetCycleTimeoutRef.current = setTimeout(() => {
+        if (isCancelled) return;
+        const flipStart = Date.now();
+
+        setShips(prev =>
+          prev.map(s => {
+            if (activeIds.includes(s.id)) {
+              return {
+                ...s,
+                scaleX: -1,
+                moving: true,
+                lastMoveTime: flipStart,
+                progress: 1,
+                transitionDuration: `${FLEET_FLIP_MS}ms`
+              };
+            }
+            return s;
+          })
+        );
+
+        // 3. Unified Sail Return (رحلة العودة المتزامنة لكافة سفن الأسطول)
+        fleetCycleTimeoutRef.current = setTimeout(() => {
+          if (isCancelled) return;
+          const returnStart = Date.now();
+
+          setShips(prev =>
+            prev.map(s => {
+              if (activeIds.includes(s.id)) {
+                return {
+                  ...s,
+                  scaleX: -1,
+                  moving: true,
+                  lastMoveTime: returnStart,
+                  left: docks[s.id]?.l || '45%',
+                  top: docks[s.id]?.t || '41%',
+                  transitionDuration: `${FLEET_RETURN_MS}ms`
+                };
+              }
+              return s;
+            })
+          );
+
+          // 4. Unified Dock & Collect All (الرسو وتفريغ وجمع الصيد لكل الأسطول معاً)
+          fleetCycleTimeoutRef.current = setTimeout(() => {
+            if (isCancelled) return;
+
+            setShips(prev =>
+              prev.map(s => {
+                if (activeIds.includes(s.id)) {
                   return {
                     ...s,
+                    scaleX: 1,
+                    status: 'docked',
                     moving: false,
                     lastMoveTime: 0,
-                    left: s.status === 'fishing' ? (fishSpots[s.id]?.l || '70%') : (docks[s.id]?.l || '45%'),
-                    top: s.status === 'fishing' ? (fishSpots[s.id]?.t || '41%') : (docks[s.id]?.t || '41%')
+                    progress: 1,
+                    transitionDuration: `${FLEET_DOCK_PAUSE_MS}ms`
                   };
                 }
                 return s;
+              })
+            );
+
+            // Collect catch for all active ships in a single batch
+            let batchExp = 0;
+            const invDeltas: Record<string, number> = {};
+
+            activeIds.forEach(id => {
+              const currentShip = shipsRef.current.find(s => s.id === id);
+              if (!currentShip) return;
+              const catchData = calculateShipCatch(currentShip);
+              if (catchData.totalAmount > 0) {
+                invDeltas[catchData.fishInfo.fullName] = (invDeltas[catchData.fishInfo.fullName] || 0) + catchData.totalAmount;
+              }
+              batchExp += catchData.expReward;
+
+              // Spawn particles at dock
+              const dockPos = docks[id] || { l: '45%', t: '48%' };
+              const sx = parseFloat(dockPos.l) || 45;
+              const sy = parseFloat(dockPos.t) || 48;
+              window.dispatchEvent(new CustomEvent('spawn-pirate-particles', {
+                detail: { x: sx, y: sy, type: 'water-splash', count: 12 }
               }));
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('spawn-pirate-particles', {
+                  detail: { x: sx, y: sy, type: 'gold-gain', count: 10 }
+                }));
+              }, 200);
+            });
+
+            if (Object.keys(invDeltas).length > 0) {
+              setFishInventory(prev => {
+                const nextInv = { ...prev };
+                Object.entries(invDeltas).forEach(([name, amt]) => {
+                  nextInv[name] = ((nextInv[name] as number) || 0) + amt;
+                });
+                localStorage.setItem('pirate_fish_inventory', JSON.stringify(nextInv));
+                return nextInv;
+              });
             }
-            return;
-          }
 
-          // If ship is docked and idle at port, send it to fish automatically (NEVER stop, even if warehouse is full!)
-          if (ship.status === 'docked' && !ship.moving) {
-            startShipFishing(ship.id, true);
-          }
-          // If ship is fishing and has settled at fishing spot, collect and return automatically
-          else if (ship.status === 'fishing' && !ship.moving) {
-            collectShipFish(ship.id, true);
-          }
-        }
-      });
-    }, 360);
+            if (batchExp > 0) {
+              setExp(prev => {
+                const nextExp = prev + batchExp;
+                localStorage.setItem('pirate_exp', String(nextExp));
+                return nextExp;
+              });
+            }
 
-    return () => clearInterval(autoTimer);
-  }, [ships, fishStorageLevel, pirateClass, fishInventory]);
+            // 5. Rest at dock, then repeat synchronized cycle
+            fleetCycleTimeoutRef.current = setTimeout(() => {
+              if (!isCancelled) {
+                runSynchronizedFleetCycle();
+              }
+            }, FLEET_DOCK_PAUSE_MS);
+
+          }, FLEET_RETURN_MS);
+        }, FLEET_FLIP_MS);
+      }, FLEET_SAIL_OUT_MS);
+    };
+
+    runSynchronizedFleetCycle();
+
+    return () => {
+      isCancelled = true;
+      if (fleetCycleTimeoutRef.current) {
+        clearTimeout(fleetCycleTimeoutRef.current);
+      }
+    };
+  }, [calculateShipCatch]);
 
   // --- Ship Repair Handler (Manual & Kit Repairs) ---
   const handleRepairShip = async (

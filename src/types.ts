@@ -27,6 +27,7 @@ export interface ShipState {
   assignedCrew?: string[];
   autoFishingPaused?: boolean;
   lastMoveTime?: number;
+  progress?: number;
 }
 
 export interface ChatMessage {
