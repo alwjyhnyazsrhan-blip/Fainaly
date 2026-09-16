@@ -14,15 +14,19 @@ import ParticlesEffect from './components/ParticlesEffect';
 import { InGameNotificationBanner } from './components/InGameNotificationBanner';
 import { playNotificationSound } from './utils/notificationSound';
 import { LargeRocketExplosion } from './components/LargeRocketExplosion';
+import { MediumRocketExplosion } from './components/MediumRocketExplosion';
 import { SmallRocketExplosion } from './components/SmallRocketExplosion';
 import { AtomicBombExplosion } from './components/AtomicBombExplosion';
 import { 
   playLargeRocketIncomingSound, 
   playLargeRocketExplosionSound,
+  playMediumRocketIncomingSound,
+  playMediumRocketExplosionSound,
   playSmallRocketIncomingSound,
   playSmallRocketExplosionSound,
   playAtomicBombDropSound,
-  playAtomicBombExplosionSound
+  playAtomicBombExplosionSound,
+  playMediaBombExplosionSound
 } from './utils/explosionSound';
 
 import ShipImage from './components/ShipImage';
@@ -805,6 +809,8 @@ export default function App() {
   const [globalMessageText, setGlobalMessageText] = useState<string>('');
   const [isLargeRocketActive, setIsLargeRocketActive] = useState<boolean>(false);
   const [showLargeRocketExplosion, setShowLargeRocketExplosion] = useState<boolean>(false);
+  const [isMediumRocketActive, setIsMediumRocketActive] = useState<boolean>(false);
+  const [showMediumRocketExplosion, setShowMediumRocketExplosion] = useState<boolean>(false);
   const [isSmallRocketActive, setIsSmallRocketActive] = useState<boolean>(false);
   const [showSmallRocketExplosion, setShowSmallRocketExplosion] = useState<boolean>(false);
   const [rocketTargetPos, setRocketTargetPos] = useState<{ l: string; t: string }>({ l: '45%', t: '49%' });
@@ -813,6 +819,18 @@ export default function App() {
   const [showSmokeExplosion, setShowSmokeExplosion] = useState<boolean>(false);
   const [showAdSelectorModal, setShowAdSelectorModal] = useState<boolean>(false);
   const [showLegendaryRepairSparkles, setShowLegendaryRepairSparkles] = useState<boolean>(false);
+
+  // Helper to dynamically calculate launch trajectory angle from bottom-right corner (96%, 96%) to target
+  const getRocketLaunchAngle = (targetLeftStr: string, targetTopStr: string) => {
+    const startX = 96;
+    const startY = 96;
+    const targetX = parseFloat(targetLeftStr) || 45;
+    const targetY = parseFloat(targetTopStr) || 49;
+    const dx = targetX - startX;
+    const dy = targetY - startY;
+    const deg = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+    return `${deg.toFixed(1)}deg`;
+  };
 
   // --- In-Game Real-time Notification Banner States & Queue ---
   const [currentNotification, setCurrentNotification] = useState<GlobalNotification | null>(null);
@@ -918,7 +936,7 @@ export default function App() {
     playAtomicBombDropSound();
     setTimeout(() => {
       playAtomicBombExplosionSound();
-    }, 1180);
+    }, 1350);
   };
 
   const playLuffyAdSound = () => {
@@ -1346,12 +1364,40 @@ export default function App() {
     }, 750);
   };
 
-  const handleLaunchMediumRocket = () => {
+  const handleLaunchMediumRocket = (targetShipOverride?: any) => {
     if (!inspectedPlayer) return;
     
-    // Ensure all menus are closed
+    // Ensure all menus are closed so the battlefield is completely unobstructed
     setSelectedVisitedShip(null);
     setShowWeaponSelector(false);
+
+    // Determine the targeted ship and calculate its exact screen coordinates
+    const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
+      ? inspectedPlayer.ships
+      : getInspectedPlayerShips(inspectedPlayer);
+    const targetShip = targetShipOverride || selectedVisitedShip || baseShips[0];
+
+    let targetLeft = '45%';
+    let targetTop = '49%';
+    if (targetShip) {
+      if (targetShip.left && targetShip.top) {
+        targetLeft = targetShip.left;
+        targetTop = targetShip.top;
+      } else {
+        const idx = baseShips.findIndex((s: any) => s.id === targetShip.id);
+        const dockKey = `s${targetShip.id || (idx >= 0 ? idx + 1 : 1)}`;
+        const fallbackPos = docks[dockKey] || docks[`s${(idx >= 0 ? idx + 1 : 1)}`] || { l: '45%', t: '49%' };
+        targetLeft = fallbackPos.l;
+        targetTop = fallbackPos.t;
+      }
+    }
+
+    setRocketTargetPos({ l: targetLeft, t: targetTop });
+
+    // Play medium rocket incoming sound
+    playMediumRocketIncomingSound();
+
+    setIsMediumRocketActive(true);
 
     setWeapons(prev => {
       const updated = { ...prev, mediumRocket: Math.max(0, (prev.mediumRocket || 902) - 1) };
@@ -1359,84 +1405,102 @@ export default function App() {
       return updated;
     });
 
-    const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
-    const baseShips = (inspectedPlayer.ships && Array.isArray(inspectedPlayer.ships) && inspectedPlayer.ships.length > 0)
-      ? inspectedPlayer.ships
-      : getInspectedPlayerShips(inspectedPlayer);
-    const targetShip = selectedVisitedShip || baseShips[0];
+    // Fly medium rocket (lasts 0.9s matching user video)
+    setTimeout(() => {
+      setIsMediumRocketActive(false);
+      setShowMediumRocketExplosion(true);
+      setIsShaking(true);
+      setRocketXpText('XP +1,000');
+      setShowRocketXp(true);
 
-    if (targetShip && targetDocId) {
-      let allDestroyed = false;
-      const updatedShips = baseShips.map((s: any) => {
-        if (s.id === targetShip.id) {
-          const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
-          const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
-          const newHeart = Math.max(0, currentHeart - 4000);
-          return { ...s, heart: newHeart, ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {}) };
-        }
-        return s;
-      });
+      // Play authentic medium rocket explosion sound
+      playMediumRocketExplosionSound();
 
-      allDestroyed = updatedShips.length > 0 && updatedShips.every((s: any) => typeof s.heart === 'number' && s.heart <= 0);
+      const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
 
-      const existingReports = Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports : [];
-      const newReport = {
-        id: `rocket_med_${Date.now()}`,
-        opponent: username,
-        opponentAvatar: avatar || '☠️',
-        type: 'defense',
-        result: 'defeat',
-        goldChange: 0,
-        date: new Date().toISOString(),
-        title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 استهداف سفينتك بصاروخ متوسط!',
-        log: [
-          `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ متوسط ملحقاً 4,000 نقطة ضرر!`,
-          allDestroyed ? `🔥 دُمرت جميع سفن أسطولك وأصبح الميناء محترقاً ومدمراً بالكامل!` : `⚠️ قم بصيانة وإصلاح أضرار هيكل السفينة فوراً.`
-        ]
-      };
-
-      // Secure collection-based dispatch to /harborEvents
-      createHarborEvent(targetDocId, 'ROCKET_MEDIUM', {
-        damage: 4000,
-        targetShipId: targetShip.id,
-        allDestroyed,
-        newReport
-      });
-
-      // Direct persistent update to target user profile document in Firestore
-      if (targetDocId && db) {
-        updateDoc(doc(db, 'users', targetDocId), {
-          portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
-          ships: updatedShips,
-          battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
-          updatedAt: new Date().toISOString()
-        }).catch((err) => {
-          console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+      if (targetShip && targetDocId) {
+        let allDestroyed = false;
+        const updatedShips = baseShips.map((s: any) => {
+          if (s.id === targetShip.id) {
+            const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
+            const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
+            const newHeart = Math.max(0, currentHeart - 4000);
+            return { ...s, heart: newHeart, ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {}) };
+          }
+          return s;
         });
-      }
 
-      // Synchronize inspected player locally
-      setInspectedPlayer((prev: any) => prev ? {
-        ...prev,
-        portDestroyed: allDestroyed || prev.portDestroyed,
-        ships: updatedShips
-      } : prev);
+        allDestroyed = updatedShips.length > 0 && updatedShips.every((s: any) => typeof s.heart === 'number' && s.heart <= 0);
 
-      setRealPlayers(prev => prev.map(p => {
-        if (p.id === targetDocId || p.userId === targetDocId) {
-          return { ...p, portDestroyed: allDestroyed || p.portDestroyed, ships: updatedShips };
+        const existingReports = Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports : [];
+        const newReport = {
+          id: `rocket_med_${Date.now()}`,
+          opponent: username,
+          opponentAvatar: avatar || '☠️',
+          type: 'defense',
+          result: 'defeat',
+          goldChange: 0,
+          date: new Date().toISOString(),
+          title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 استهداف سفينتك بصاروخ متوسط!',
+          log: [
+            `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ متوسط ملحقاً 4,000 نقطة ضرر!`,
+            allDestroyed ? `🔥 دُمرت جميع سفن أسطولك وأصبح الميناء محترقاً ومدمراً بالكامل!` : `⚠️ قم بصيانة وإصلاح أضرار هيكل السفينة فوراً.`
+          ]
+        };
+
+        // Secure collection-based dispatch to /harborEvents
+        createHarborEvent(targetDocId, 'ROCKET_MEDIUM', {
+          damage: 4000,
+          targetShipId: targetShip.id,
+          allDestroyed,
+          newReport
+        });
+
+        // Direct persistent update to target user profile document in Firestore
+        if (targetDocId && db) {
+          updateDoc(doc(db, 'users', targetDocId), {
+            portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
+            ships: updatedShips,
+            battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
+            updatedAt: new Date().toISOString()
+          }).catch((err) => {
+            console.warn("Direct update to target user doc failed, harborEvent will handle it:", err);
+          });
         }
-        return p;
-      }));
-    }
-    
-    sendSecureChatMessage(
-      'القوات الصاروخية 🚀',
-      '🚀',
-      `🚀 صاروخ متوسط! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} بـ 4,000 ضرر!`
-    );
 
-    showToast("💥 تم إطلاق الصاروخ المتوسط وإصابة السفينة بـ 4,000 ضرر!", "success");
+        // Synchronize inspected player locally
+        setInspectedPlayer((prev: any) => prev ? {
+          ...prev,
+          portDestroyed: allDestroyed || prev.portDestroyed,
+          ships: updatedShips
+        } : prev);
+
+        setRealPlayers(prev => prev.map(p => {
+          if (p.id === targetDocId || p.userId === targetDocId) {
+            return { ...p, portDestroyed: allDestroyed || p.portDestroyed, ships: updatedShips };
+          }
+          return p;
+        }));
+      }
+      
+      sendSecureChatMessage(
+        'القوات الصاروخية 🚀',
+        '🚀',
+        `🚀 صاروخ متوسط! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} بـ 4,000 ضرر!`
+      );
+
+      showToast("💥 تم إطلاق الصاروخ المتوسط وإصابة السفينة بـ 4,000 ضرر!", "success");
+
+      // Reset screen shake after explosion punch
+      setTimeout(() => {
+        setIsShaking(false);
+      }, 500);
+
+      // Hide XP badge after 2.8s
+      setTimeout(() => {
+        setShowRocketXp(false);
+      }, 2800);
+    }, 900);
   };
 
   const handleLaunchLargeRocket = (targetShipOverride?: any) => {
@@ -1639,6 +1703,7 @@ export default function App() {
     // Trigger smoke explosion animation
     setShowSmokeExplosion(true);
     setIsShaking(true);
+    playMediaBombExplosionSound();
 
     // Play corresponding synthesized sound
     if (selectedAdKey === 'luffy_king') {
@@ -1758,10 +1823,8 @@ export default function App() {
       return updated;
     });
 
-    // Stage 1: Fall down & strike sea (1.18s exactly matching video)
+    // Stage 1: Fall down & plunge inside sea depths before detonating (1.35s)
     setTimeout(() => {
-      setIsAtomicBombActive(false);
-      setShowAtomicExplosion(true);
       setIsShaking(true);
       
       // Play heavy nuclear detonation boom matching video reference
@@ -1850,12 +1913,13 @@ export default function App() {
         setShowAtomicBombXp(false);
       }, 2800);
 
-    }, 1180);
+    }, 1350);
 
-    // Stage 2: Stop explosion overlay after 3.4s
+    // Stage 2: Stop atomic bomb sequence after 4.8s
     setTimeout(() => {
+      setIsAtomicBombActive(false);
       setShowAtomicExplosion(false);
-    }, 3400);
+    }, 4800);
 
     // Stage 3: Reset XP anim
     setTimeout(() => {
@@ -4116,9 +4180,9 @@ export default function App() {
     const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
 
     // Calculate sail-out duration: normally 1.8s (1800ms)
-    // When auto-fishing is active, accelerate the trip significantly so auto-fishing is ultra fast!
-    let sailOutDuration = isAutoActive ? (isEngineUpgraded ? 220 : 340) : (isEngineUpgraded ? 900 : 1800);
-    sailOutDuration = Math.max(120, Math.floor(sailOutDuration / speedMultiplier));
+    // When auto-fishing is active, accelerate the trip smoothly (tuned 40% lower speed)
+    let sailOutDuration = isAutoActive ? (isEngineUpgraded ? 520 : 780) : (isEngineUpgraded ? 900 : 1800);
+    sailOutDuration = Math.max(285, Math.floor(sailOutDuration / speedMultiplier));
     if (isSailorActive) {
       sailOutDuration = Math.floor(sailOutDuration * 0.5);
     }
@@ -4169,7 +4233,7 @@ export default function App() {
     const shipCrew = selectedShip.assignedCrew || [];
     const isAutoActive = isAuto || (!selectedShip.autoFishingPaused && (shipCrew.includes('golden_hunter') || shipCrew.includes('gold_fisher')));
 
-    const flipDuration = isAutoActive ? 90 : 500;
+    const flipDuration = isAutoActive ? 220 : 500;
 
     // Start the return action: Flip direction facing left
     setShips(prev =>
@@ -4187,10 +4251,10 @@ export default function App() {
       })
     );
 
-    let returnTripDuration = isAutoActive ? (isEngineUpgraded ? 220 : 340) : (isEngineUpgraded ? 800 : 1800);
+    let returnTripDuration = isAutoActive ? (isEngineUpgraded ? 520 : 780) : (isEngineUpgraded ? 800 : 1800);
     const speedLvl = selectedShip.speedLevel || 1;
     const speedMultiplier = 1 + (speedLvl - 1) * 0.08;
-    returnTripDuration = Math.max(120, Math.floor(returnTripDuration / speedMultiplier));
+    returnTripDuration = Math.max(285, Math.floor(returnTripDuration / speedMultiplier));
 
     const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
     const isLuckActive = shipCrew.includes('luck');
@@ -4233,7 +4297,7 @@ export default function App() {
           window.dispatchEvent(new CustomEvent('spawn-pirate-particles', {
             detail: { x: sx, y: sy, type: 'gold-gain', count: 12 }
           }));
-        }, isAutoActive ? 150 : 300);
+        }, isAutoActive ? 280 : 300);
 
         setShips(prev =>
           prev.map(s => {
@@ -4244,7 +4308,7 @@ export default function App() {
                 status: 'docked',
                 moving: false,
                 lastMoveTime: 0,
-                transitionDuration: isAutoActive ? '0.3s' : '1.8s'
+                transitionDuration: isAutoActive ? '0.7s' : '1.8s'
               };
             }
             return s;
@@ -4345,8 +4409,8 @@ export default function App() {
 
     if (autoShips.length === 0) return;
 
-    // High-speed auto-fishing takes ~0.85 seconds per complete trip (sail out, collect, return)
-    const cyclesPerShip = Math.floor(cappedSeconds / 0.85);
+    // High-speed auto-fishing takes ~2.0 seconds per complete trip (sail out, collect, return - tuned 40% lower speed)
+    const cyclesPerShip = Math.floor(cappedSeconds / 2.0);
     if (cyclesPerShip <= 0) return;
 
     let totalGainedGold = 0;
@@ -4483,10 +4547,10 @@ export default function App() {
         const hasGoldenHunter = assigned.includes('golden_hunter') || assigned.includes('gold_fisher');
         
         if (hasGoldenHunter) {
-          // Unfreeze watchdog: If a ship has been moving for over 1.2s (e.g. after refresh/tab throttle), unfreeze it!
+          // Unfreeze watchdog: If a ship has been moving for over 3.0s (e.g. after refresh/tab throttle), unfreeze it!
           if (ship.moving) {
             const moveStarted = ship.lastMoveTime || 0;
-            if (!moveStarted || Date.now() - moveStarted > 1200) {
+            if (!moveStarted || Date.now() - moveStarted > 3000) {
               setShips(prev => prev.map(s => {
                 if (s.id === ship.id) {
                   return {
@@ -4513,7 +4577,7 @@ export default function App() {
           }
         }
       });
-    }, 150);
+    }, 360);
 
     return () => clearInterval(autoTimer);
   }, [ships, fishStorageLevel, pirateClass, fishInventory]);
@@ -11766,36 +11830,67 @@ export default function App() {
               }
               @keyframes fly-rocket-targeted {
                 0% {
-                  left: 88%;
-                  top: -20%;
-                  transform: translate(-50%, -50%) rotate(-135deg) scale(0.65);
+                  left: 96%;
+                  top: 96%;
+                  transform: translate(-50%, -50%) rotate(var(--rocket-angle, -48deg)) scale(0.6);
                   opacity: 0;
                 }
-                10% {
+                6% {
                   opacity: 1;
                 }
                 100% {
                   left: var(--rocket-target-x, 45%);
                   top: var(--rocket-target-y, 49%);
-                  transform: translate(-50%, -50%) rotate(-135deg) scale(1.2);
+                  transform: translate(-50%, -50%) rotate(var(--rocket-angle, -48deg)) scale(1.25);
                   opacity: 1;
                 }
               }
               @keyframes fly-rocket-small-targeted {
                 0% {
-                  left: 90%;
-                  top: -15%;
-                  transform: translate(-50%, -50%) rotate(-135deg) scale(0.6);
+                  left: 96%;
+                  top: 96%;
+                  transform: translate(-50%, -50%) rotate(var(--rocket-angle, -48deg)) scale(0.5);
                   opacity: 0;
                 }
-                10% {
+                6% {
                   opacity: 1;
                 }
                 100% {
                   left: var(--rocket-target-x, 45%);
                   top: var(--rocket-target-y, 49%);
-                  transform: translate(-50%, -50%) rotate(-135deg) scale(0.95);
+                  transform: translate(-50%, -50%) rotate(var(--rocket-angle, -48deg)) scale(0.95);
                   opacity: 1;
+                }
+              }
+              @keyframes fly-rocket-med-targeted {
+                0% {
+                  left: 96%;
+                  top: 96%;
+                  transform: translate(-50%, -50%) rotate(var(--rocket-angle, -48deg)) scale(0.55);
+                  opacity: 0;
+                }
+                6% {
+                  opacity: 1;
+                }
+                100% {
+                  left: var(--rocket-target-x, 45%);
+                  top: var(--rocket-target-y, 49%);
+                  transform: translate(-50%, -50%) rotate(var(--rocket-angle, -48deg)) scale(1.1);
+                  opacity: 1;
+                }
+              }
+              @keyframes rocket-launch-flash {
+                0% {
+                  transform: translate(-50%, -50%) scale(0.2);
+                  opacity: 1;
+                }
+                50% {
+                  transform: translate(-50%, -50%) scale(1.35);
+                  opacity: 0.9;
+                }
+                100% {
+                  transform: translate(-50%, -50%) scale(1.9);
+                  opacity: 0;
                 }
               }
               @keyframes float-xp-topleft {
@@ -11822,40 +11917,74 @@ export default function App() {
               }
               @keyframes fall-down {
                 0% {
-                  top: -120px;
-                  transform: translateX(-50%) scale(0.65) rotate(6deg);
+                  top: -140px;
+                  transform: translateX(-50%) scale(0.65) rotate(4deg);
                   filter: brightness(1);
                   opacity: 0;
                 }
-                15% {
+                10% {
                   opacity: 1;
                 }
-                85% {
+                58% {
+                  top: 48%;
+                  transform: translateX(-50%) scale(0.95) rotate(0deg);
+                  filter: brightness(1.2) drop-shadow(0 0 16px rgba(255, 152, 0, 0.85));
+                }
+                64% {
+                  top: 52%;
                   transform: translateX(-50%) scale(1.0) rotate(0deg);
-                  filter: brightness(1.2) drop-shadow(0 0 16px rgba(255, 152, 0, 0.75));
+                  filter: brightness(1.35) drop-shadow(0 0 20px #38bdf8);
+                }
+                82% {
+                  top: 59%;
+                  transform: translateX(-50%) scale(0.9) rotate(0deg);
+                  filter: hue-rotate(170deg) brightness(0.7) contrast(1.2) drop-shadow(0 0 25px #0284c7);
                 }
                 100% {
-                  top: 58%;
-                  transform: translateX(-50%) scale(1.15) rotate(0deg);
-                  filter: brightness(2.2) drop-shadow(0 0 30px #ffffff);
+                  top: 65%;
+                  transform: translateX(-50%) scale(1.05) rotate(0deg);
+                  filter: hue-rotate(170deg) brightness(2.4) drop-shadow(0 0 45px #ffffff);
                 }
               }
               @keyframes water-landing-splash {
                 0% {
+                  transform: translate(-50%, -50%) scale(0.1);
+                  opacity: 0;
+                }
+                56% {
                   transform: translate(-50%, -50%) scale(0.15);
                   opacity: 0;
                 }
-                40% {
-                  opacity: 0.9;
+                66% {
+                  transform: translate(-50%, -50%) scale(1.0);
+                  opacity: 0.95;
                 }
                 100% {
-                  transform: translate(-50%, -50%) scale(1.8);
+                  transform: translate(-50%, -50%) scale(2.4);
                   opacity: 0;
                 }
               }
+              @keyframes underwater-bubbles-rise {
+                0% {
+                  opacity: 0;
+                  transform: scale(0.2);
+                }
+                62% {
+                  opacity: 0;
+                  transform: scale(0.3);
+                }
+                72% {
+                  opacity: 1;
+                  transform: scale(0.9) translateY(-10px);
+                }
+                100% {
+                  opacity: 0.85;
+                  transform: scale(1.4) translateY(-35px);
+                }
+              }
               @keyframes thruster-flame {
-                0% { transform: scaleY(1) rotate(180deg) scaleX(0.95); opacity: 0.95; filter: hue-rotate(0deg); }
-                100% { transform: scaleY(1.5) rotate(180deg) scaleX(1.2); opacity: 0.75; filter: hue-rotate(-15deg) brightness(1.8); }
+                0% { transform: scaleY(0.9) scaleX(0.95); opacity: 0.95; }
+                100% { transform: scaleY(1.45) scaleX(1.15); opacity: 0.85; filter: brightness(1.6); }
               }
               @keyframes shake-viewport-extreme {
                 0% { transform: translate(0, 0) scale(1) rotate(0deg); }
@@ -11993,7 +12122,7 @@ export default function App() {
           {/* Sea View Playground where Ships sit on the water */}
           <div 
             onClick={(e) => {
-              if (isAtomicBombActive || showAtomicExplosion || isLargeRocketActive || showLargeRocketExplosion || isSmallRocketActive || showSmallRocketExplosion || showSmokeExplosion) {
+              if (isAtomicBombActive || showAtomicExplosion || isLargeRocketActive || showLargeRocketExplosion || isMediumRocketActive || showMediumRocketExplosion || isSmallRocketActive || showSmallRocketExplosion || showSmokeExplosion) {
                 return;
               }
               const target = e.target as HTMLElement;
@@ -12306,7 +12435,7 @@ export default function App() {
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (isAtomicBombActive || showAtomicExplosion || isLargeRocketActive || showLargeRocketExplosion || isSmallRocketActive || showSmallRocketExplosion || showSmokeExplosion) {
+                      if (isAtomicBombActive || showAtomicExplosion || isLargeRocketActive || showLargeRocketExplosion || isMediumRocketActive || showMediumRocketExplosion || isSmallRocketActive || showSmallRocketExplosion || showSmokeExplosion) {
                         return;
                       }
                       setSelectedVisitedShip({
@@ -12492,55 +12621,16 @@ export default function App() {
               🌀
             </div>
 
-            {/* Animated Descending Atomic Bomb (1.18s matching video) */}
+            {/* Seamless Authentic Atomic Bomb Sky Descent, Sea Water Penetration & Underwater Detonation */}
             {isAtomicBombActive && (
-              <div 
-                style={{
-                  position: 'absolute',
-                  left: '42%',
-                  zIndex: 9999,
-                  animation: 'fall-down 1.18s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                }}
-              >
-                <img 
-                  src={WEAPON_ATOMIC_BOMB_ICON} 
-                  alt="قنبلة ذرية ساقطة" 
-                  referrerPolicy="no-referrer"
-                  style={{ 
-                    width: '84px', 
-                    height: '84px', 
-                    objectFit: 'contain', 
-                    filter: 'drop-shadow(0 0 16px rgba(255, 152, 0, 0.85)) drop-shadow(0 4px 10px rgba(0,0,0,0.8))' 
-                  }} 
-                />
-                {/* Water landing splash circle right as bomb nears the sea */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '80px',
-                    left: '50%',
-                    width: '90px',
-                    height: '35px',
-                    borderRadius: '50%',
-                    border: '3px solid rgba(255, 255, 255, 0.85)',
-                    background: 'radial-gradient(ellipse, rgba(255,255,255,0.4) 0%, transparent 70%)',
-                    animation: 'water-landing-splash 1.18s ease-in forwards',
-                    pointerEvents: 'none'
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Authentic Cartoon Mushroom Cloud Nuclear Explosion Component */}
-            {showAtomicExplosion && (
               <AtomicBombExplosion
-                x="42%"
-                y="58%"
-                onComplete={() => setShowAtomicExplosion(false)}
+                x="45%"
+                surfaceY="48%"
+                depthY="64%"
+                onComplete={() => {
+                  setIsAtomicBombActive(false);
+                  setShowAtomicExplosion(false);
+                }}
               />
             )}
 
@@ -12600,7 +12690,32 @@ export default function App() {
               </div>
             )}
 
-            {/* Small Rocket Flying Animation (Matching User Reference Video) */}
+            {/* Rocket Launch Flash & Exhaust Ring Effect at Bottom-Right Corner */}
+            {(isSmallRocketActive || isMediumRocketActive || isLargeRocketActive) && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  left: '96%',
+                  top: '96%',
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: 9998,
+                  pointerEvents: 'none'
+                }}
+              >
+                <div 
+                  style={{
+                    width: '74px',
+                    height: '74px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, #ffffff 15%, #fde047 40%, #ea580c 70%, transparent 100%)',
+                    animation: 'rocket-launch-flash 0.45s ease-out forwards',
+                    filter: 'drop-shadow(0 0 18px #f97316)'
+                  }} 
+                />
+              </div>
+            )}
+
+            {/* Small Rocket Flying Animation (Launching from Bottom Right) */}
             {isSmallRocketActive && (
               <div 
                 style={{
@@ -12610,6 +12725,7 @@ export default function App() {
                   animation: 'fly-rocket-small-targeted 0.75s cubic-bezier(0.2, 0.7, 0.35, 1) forwards',
                   '--rocket-target-x': rocketTargetPos.l,
                   '--rocket-target-y': rocketTargetPos.t,
+                  '--rocket-angle': getRocketLaunchAngle(rocketTargetPos.l, rocketTargetPos.t),
                 } as React.CSSProperties}
               >
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -12642,7 +12758,50 @@ export default function App() {
               </div>
             )}
 
-            {/* Large Rocket Flying Animation */}
+            {/* Medium Rocket Flying Animation (Launching from Bottom Right) */}
+            {isMediumRocketActive && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  zIndex: 9999,
+                  pointerEvents: 'none',
+                  animation: 'fly-rocket-med-targeted 0.9s cubic-bezier(0.18, 0.72, 0.35, 1) forwards',
+                  '--rocket-target-x': rocketTargetPos.l,
+                  '--rocket-target-y': rocketTargetPos.t,
+                  '--rocket-angle': getRocketLaunchAngle(rocketTargetPos.l, rocketTargetPos.t),
+                } as React.CSSProperties}
+              >
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img 
+                    src={WEAPON_MEDIUM_MISSILE_ICON} 
+                    alt="صاروخ متوسط طائر" 
+                    referrerPolicy="no-referrer"
+                    style={{ 
+                      width: '58px', 
+                      height: '58px', 
+                      objectFit: 'contain', 
+                      filter: 'drop-shadow(0 0 14px rgba(251, 146, 60, 0.95)) drop-shadow(0 2px 8px rgba(0,0,0,0.8))' 
+                    }} 
+                  />
+                  {/* Thruster exhaust flame behind the medium missile */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '-12px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: '18px',
+                    height: '28px',
+                    borderRadius: '50% 50% 20% 20%',
+                    background: 'radial-gradient(ellipse at top, #ffffff 10%, #fef08a 30%, #f97316 65%, #dc2626 90%, transparent 100%)',
+                    animation: 'thruster-flame 0.1s infinite alternate',
+                    filter: 'drop-shadow(0 0 10px #f97316)',
+                    zIndex: -1
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* Large Rocket Flying Animation (Launching from Bottom Right) */}
             {isLargeRocketActive && (
               <div 
                 style={{
@@ -12652,6 +12811,7 @@ export default function App() {
                   animation: 'fly-rocket-targeted 1.25s cubic-bezier(0.18, 0.72, 0.35, 1) forwards',
                   '--rocket-target-x': rocketTargetPos.l,
                   '--rocket-target-y': rocketTargetPos.t,
+                  '--rocket-angle': getRocketLaunchAngle(rocketTargetPos.l, rocketTargetPos.t),
                 } as React.CSSProperties}
               >
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -12691,6 +12851,16 @@ export default function App() {
                 y={rocketTargetPos.t}
                 damage={800}
                 onComplete={() => setShowSmallRocketExplosion(false)}
+              />
+            )}
+
+            {/* Medium Rocket Comic Cloud Explosion Exactly Matching User Reference Video */}
+            {showMediumRocketExplosion && (
+              <MediumRocketExplosion
+                x={rocketTargetPos.l}
+                y={rocketTargetPos.t}
+                damage={4000}
+                onComplete={() => setShowMediumRocketExplosion(false)}
               />
             )}
 
@@ -13065,7 +13235,7 @@ export default function App() {
           )}
 
           {/* ----------------- VISITED SHIP DETAILS MODAL (بوابة خيارات السفينة المحددة) ----------------- */}
-          {selectedVisitedShip && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
+          {selectedVisitedShip && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isMediumRocketActive && !showMediumRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -13823,7 +13993,7 @@ export default function App() {
           )}
 
           {/* Weapon Selector Modal */}
-          {showWeaponSelector && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
+          {showWeaponSelector && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isMediumRocketActive && !showMediumRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -13923,7 +14093,7 @@ export default function App() {
                         return;
                       }
                       setShowWeaponSelector(false);
-                      handleLaunchSmallRocket();
+                      handleLaunchSmallRocket(selectedVisitedShip);
                     }}
                     style={{
                       background: 'rgba(24, 24, 27, 0.6)',
@@ -13956,7 +14126,7 @@ export default function App() {
                         return;
                       }
                       setShowWeaponSelector(false);
-                      handleLaunchMediumRocket();
+                      handleLaunchMediumRocket(selectedVisitedShip);
                     }}
                     style={{
                       background: 'rgba(24, 24, 27, 0.6)',
@@ -14206,7 +14376,7 @@ export default function App() {
           )}
 
           {/* Global Message Modal */}
-          {showGlobalMessageModal && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
+          {showGlobalMessageModal && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isMediumRocketActive && !showMediumRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,
@@ -14459,7 +14629,7 @@ export default function App() {
           )}
 
           {/* Loot Selector Modal */}
-          {showLootSelector && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
+          {showLootSelector && !isAtomicBombActive && !showAtomicExplosion && !isLargeRocketActive && !showLargeRocketExplosion && !isMediumRocketActive && !showMediumRocketExplosion && !isSmallRocketActive && !showSmallRocketExplosion && !showSmokeExplosion && (
             <div style={{
               position: 'fixed',
               inset: 0,

@@ -1,9 +1,24 @@
-// Comprehensive procedural sound generator for missile flight and cinematic heavy explosion
-// Designed with multi-layered Web Audio synthesis for authentic arcade combat impact
+// Professional Realistic Audio Engine for Weapons & Explosions
+// Combines authentic recorded acoustic samples with real-time physical sub-bass pressure waves
+// Includes zero-latency AudioBuffer pre-caching and procedural Web Audio fallback.
 
 let audioCtx: AudioContext | null = null;
+const audioBufferCache = new Map<string, AudioBuffer>();
+const audioLoadingPromises = new Map<string, Promise<AudioBuffer | null>>();
 
-function getAudioContext(): AudioContext | null {
+export const WEAPON_AUDIO_URLS = {
+  smallRocketIncoming: '/audio/small_rocket_incoming.mp3',
+  smallRocketExplosion: '/audio/small_rocket_explosion.mp3',
+  mediumRocketIncoming: '/audio/medium_rocket_incoming.mp3',
+  mediumRocketExplosion: '/audio/medium_rocket_explosion.mp3',
+  largeRocketIncoming: '/audio/large_rocket_incoming.mp3',
+  largeRocketExplosion: '/audio/large_rocket_explosion.mp3',
+  atomicBombDrop: '/audio/atomic_bomb_drop.mp3',
+  atomicBombExplosion: '/audio/atomic_bomb_explosion.mp3',
+  mediaBombExplosion: '/audio/media_bomb_explosion.mp3',
+};
+
+export function getAudioContext(): AudioContext | null {
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return null;
@@ -20,7 +35,7 @@ function getAudioContext(): AudioContext | null {
   }
 }
 
-function isAudioMuted(): boolean {
+export function isAudioMuted(): boolean {
   try {
     const isGlobalMuted = localStorage.getItem('pirate_is_muted') === 'true';
     const isSfxMuted = localStorage.getItem('pirate_sfx_muted') === 'true';
@@ -31,38 +46,68 @@ function isAudioMuted(): boolean {
 }
 
 /**
- * Creates an audio buffer with procedural white + pink noise for realistic explosion roar
+ * Preloads and decodes an audio buffer into RAM for zero-latency playback
  */
-function createNoiseBuffer(ctx: AudioContext, durationSeconds = 2.5): AudioBuffer {
-  const bufferSize = Math.floor(ctx.sampleRate * durationSeconds);
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  
-  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-  for (let i = 0; i < bufferSize; i++) {
-    // Generate pink noise approximation (Paul Kellet's filter method)
-    const white = Math.random() * 2 - 1;
-    b0 = 0.99886 * b0 + white * 0.0555179;
-    b1 = 0.99332 * b1 + white * 0.0750759;
-    b2 = 0.96900 * b2 + white * 0.1538520;
-    b3 = 0.86650 * b3 + white * 0.3104856;
-    b4 = 0.55000 * b4 + white * 0.5329522;
-    b5 = -0.7616 * b5 - white * 0.0168980;
-    const pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
-    b6 = white * 0.115926;
-    
-    // Mix 60% pink noise with 40% white noise for punchy explosion texture
-    data[i] = (pink * 0.11) + (white * 0.08);
+async function loadAudioBuffer(ctx: AudioContext, url: string): Promise<AudioBuffer | null> {
+  if (audioBufferCache.has(url)) {
+    return audioBufferCache.get(url)!;
   }
-  return buffer;
+  if (audioLoadingPromises.has(url)) {
+    return audioLoadingPromises.get(url)!;
+  }
+
+  const promise = (async () => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const arrayBuffer = await res.arrayBuffer();
+      const decoded = await ctx.decodeAudioData(arrayBuffer);
+      audioBufferCache.set(url, decoded);
+      return decoded;
+    } catch (err) {
+      console.debug(`Audio sample load notice (${url}):`, err);
+      return null;
+    } finally {
+      audioLoadingPromises.delete(url);
+    }
+  })();
+
+  audioLoadingPromises.set(url, promise);
+  return promise;
 }
 
 /**
- * Creates a soft saturation distortion curve for heavy bass punch
+ * Preload all realistic weapon audio files
  */
-function makeDistortionCurve(amount = 25): Float32Array {
+export function preloadWeaponSounds() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  Object.values(WEAPON_AUDIO_URLS).forEach(url => {
+    loadAudioBuffer(ctx, url).catch(() => {});
+  });
+}
+
+// Auto-warm and unlock audio context on first user interaction
+if (typeof window !== 'undefined') {
+  const warmUp = () => {
+    preloadWeaponSounds();
+    window.removeEventListener('click', warmUp);
+    window.removeEventListener('touchstart', warmUp);
+    window.removeEventListener('keydown', warmUp);
+  };
+  window.addEventListener('click', warmUp, { passive: true, once: true });
+  window.addEventListener('touchstart', warmUp, { passive: true, once: true });
+  window.addEventListener('keydown', warmUp, { passive: true, once: true });
+  // Initial passive preload attempt
+  setTimeout(() => preloadWeaponSounds(), 1500);
+}
+
+/**
+ * Generates an acoustic saturation curve for distortion
+ */
+function makeDistortionCurve(amount = 18): Float32Array {
   const k = amount;
-  const n_samples = 44100;
+  const n_samples = 22050;
   const curve = new Float32Array(n_samples);
   const deg = Math.PI / 180;
   for (let i = 0; i < n_samples; ++i) {
@@ -73,594 +118,545 @@ function makeDistortionCurve(amount = 25): Float32Array {
 }
 
 /**
- * Sound of the large missile flying towards target:
- * High-speed Doppler whistle + rocket thruster roar
+ * Creates pink/white noise buffer for procedural fallback
  */
-export function playLargeRocketIncomingSound() {
-  if (isAudioMuted()) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const flightDuration = 1.3;
-
-  try {
-    // 1. High-speed Doppler screech/whistle (1400Hz -> 380Hz)
-    const whistleOsc = ctx.createOscillator();
-    const whistleGain = ctx.createGain();
-    whistleOsc.type = 'sawtooth';
-    whistleOsc.frequency.setValueAtTime(1350, now);
-    whistleOsc.frequency.exponentialRampToValueAtTime(360, now + flightDuration);
-
-    whistleGain.gain.setValueAtTime(0.01, now);
-    whistleGain.gain.linearRampToValueAtTime(0.18, now + flightDuration * 0.75);
-    whistleGain.gain.exponentialRampToValueAtTime(0.001, now + flightDuration);
-
-    whistleOsc.connect(whistleGain);
-    whistleGain.connect(ctx.destination);
-    whistleOsc.start(now);
-    whistleOsc.stop(now + flightDuration);
-
-    // 2. Thruster rocket engine hiss (Bandpass noise)
-    const noiseBuffer = createNoiseBuffer(ctx, flightDuration + 0.2);
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.setValueAtTime(450, now);
-    bandpass.frequency.linearRampToValueAtTime(900, now + flightDuration);
-    bandpass.Q.setValueAtTime(2.0, now);
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.05, now);
-    noiseGain.gain.linearRampToValueAtTime(0.25, now + flightDuration * 0.85);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + flightDuration);
-
-    noiseSource.connect(bandpass);
-    bandpass.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-
-    noiseSource.start(now);
-    noiseSource.stop(now + flightDuration);
-  } catch (e) {
-    console.debug('Error in rocket launch sound:', e);
+function createNoiseBuffer(ctx: AudioContext, durationSeconds = 2.5): AudioBuffer {
+  const bufferSize = Math.floor(ctx.sampleRate * durationSeconds);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + white * 0.0555179;
+    b1 = 0.99332 * b1 + white * 0.0750759;
+    b2 = 0.96900 * b2 + white * 0.1538520;
+    b3 = 0.86650 * b3 + white * 0.3104856;
+    b4 = 0.55000 * b4 + white * 0.5329522;
+    b5 = -0.7616 * b5 - white * 0.0168980;
+    const pink = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+    b6 = white * 0.115926;
+    data[i] = (pink * 0.12) + (white * 0.08);
   }
+  return buffer;
 }
 
 /**
- * Sound of the large missile detonation & cinematic explosion:
- * - Supersonic impact crack (sharp punch)
- * - Heavy sub-bass detonation boom (160Hz -> 28Hz)
- * - Fiery roaring blast noise sweeping down through resonant low-pass
- * - Secondary ocean shockwave rumble echo
- * - Debris & crackling fire tail
+ * Physical sub-bass pressure wave (infrasonic chest punch)
  */
-export function playLargeRocketExplosionSound() {
-  if (isAudioMuted()) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-
+function playSubBassConcussion(
+  ctx: AudioContext,
+  now: number,
+  startFreq: number,
+  endFreq: number,
+  duration: number,
+  peakGain: number
+) {
   try {
-    // -------------------------------------------------------------
-    // LAYER 1: Initial Supersonic Detonation Crack (Impact Punch)
-    // -------------------------------------------------------------
-    const crackOsc = ctx.createOscillator();
-    const crackGain = ctx.createGain();
-    crackOsc.type = 'triangle';
-    crackOsc.frequency.setValueAtTime(280, now);
-    crackOsc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
-
-    crackGain.gain.setValueAtTime(0.5, now);
-    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-
-    crackOsc.connect(crackGain);
-    crackGain.connect(ctx.destination);
-    crackOsc.start(now);
-    crackOsc.stop(now + 0.1);
-
-    // -------------------------------------------------------------
-    // LAYER 2: Heavy Sub-Bass Detonation Boom (Chest-Thumping Thud)
-    // -------------------------------------------------------------
-    const subOsc1 = ctx.createOscillator();
-    const subOsc2 = ctx.createOscillator();
-    const subGain = ctx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     const distortion = ctx.createWaveShaper();
     distortion.curve = makeDistortionCurve(12);
     distortion.oversample = '2x';
 
-    subOsc1.type = 'sine';
-    subOsc1.frequency.setValueAtTime(160, now);
-    subOsc1.frequency.exponentialRampToValueAtTime(32, now + 0.9);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(16, endFreq), now + duration * 0.85);
 
-    subOsc2.type = 'triangle';
-    subOsc2.frequency.setValueAtTime(110, now);
-    subOsc2.frequency.exponentialRampToValueAtTime(24, now + 1.2);
+    gain.gain.setValueAtTime(peakGain, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-    subGain.gain.setValueAtTime(0.85, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
-
-    subOsc1.connect(subGain);
-    subOsc2.connect(subGain);
-    subGain.connect(distortion);
+    osc.connect(gain);
+    gain.connect(distortion);
     distortion.connect(ctx.destination);
 
-    subOsc1.start(now);
-    subOsc2.start(now);
-    subOsc1.stop(now + 1.4);
-    subOsc2.stop(now + 1.4);
-
-    // -------------------------------------------------------------
-    // LAYER 3: Roaring Fiery Noise Blast (Resonant Low-Pass Sweep)
-    // The quintessential arcade / anime explosion sound: KABOOOOM
-    // -------------------------------------------------------------
-    const noiseBuffer = createNoiseBuffer(ctx, 2.2);
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-
-    const filter1 = ctx.createBiquadFilter();
-    filter1.type = 'lowpass';
-    filter1.frequency.setValueAtTime(2200, now);
-    filter1.frequency.exponentialRampToValueAtTime(95, now + 1.4);
-    filter1.Q.setValueAtTime(4.2, now); // Strong resonance for that tearing explosive punch
-
-    const filter2 = ctx.createBiquadFilter();
-    filter2.type = 'lowpass';
-    filter2.frequency.setValueAtTime(1800, now);
-    filter2.frequency.exponentialRampToValueAtTime(80, now + 1.4);
-    filter2.Q.setValueAtTime(2.0, now);
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.9, now);
-    noiseGain.gain.linearRampToValueAtTime(0.75, now + 0.15);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-
-    noiseSource.connect(filter1);
-    filter1.connect(filter2);
-    filter2.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-
-    noiseSource.start(now);
-    noiseSource.stop(now + 2.0);
-
-    // -------------------------------------------------------------
-    // LAYER 4: Ocean Shockwave Reverb / Rolling Echo
-    // -------------------------------------------------------------
-    const echoOsc = ctx.createOscillator();
-    const echoGain = ctx.createGain();
-    echoOsc.type = 'sine';
-    echoOsc.frequency.setValueAtTime(65, now + 0.12);
-    echoOsc.frequency.exponentialRampToValueAtTime(20, now + 1.5);
-
-    echoGain.gain.setValueAtTime(0, now);
-    echoGain.gain.setValueAtTime(0.4, now + 0.12);
-    echoGain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
-
-    echoOsc.connect(echoGain);
-    echoGain.connect(ctx.destination);
-
-    echoOsc.start(now + 0.12);
-    echoOsc.stop(now + 1.7);
-
-    // -------------------------------------------------------------
-    // LAYER 5: Burning Fire Debris & Sizzle
-    // -------------------------------------------------------------
-    const debrisBuffer = createNoiseBuffer(ctx, 1.8);
-    const debrisSource = ctx.createBufferSource();
-    debrisSource.buffer = debrisBuffer;
-
-    const highpass = ctx.createBiquadFilter();
-    highpass.type = 'highpass';
-    highpass.frequency.setValueAtTime(1500, now + 0.2);
-
-    const debrisGain = ctx.createGain();
-    debrisGain.gain.setValueAtTime(0, now);
-    debrisGain.gain.setValueAtTime(0.12, now + 0.25);
-    debrisGain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-
-    debrisSource.connect(highpass);
-    highpass.connect(debrisGain);
-    debrisGain.connect(ctx.destination);
-
-    debrisSource.start(now + 0.2);
-    debrisSource.stop(now + 1.9);
-
-  } catch (e) {
-    console.debug('Error in explosion sound synthesis:', e);
+    osc.start(now);
+    osc.stop(now + duration + 0.05);
+  } catch {
+    // Ignore sub-bass errors
   }
 }
 
 /**
- * High-velocity falling whistle sound for the Atomic Bomb dropping from sky to sea.
- * Exactly matches the video reference (descending whistle with rushing air).
+ * Core realistic sample player with physical acoustic layer and procedural fallback
  */
-export function playAtomicBombDropSound() {
+function playRealisticSample(
+  url: string,
+  options: {
+    volume?: number;
+    subFreqStart?: number;
+    subFreqEnd?: number;
+    subDuration?: number;
+    subGain?: number;
+    fallbackFn?: () => void;
+  } = {}
+) {
   if (isAudioMuted()) return;
   const ctx = getAudioContext();
-  if (!ctx) return;
-
-  const now = ctx.currentTime;
-  const dropDuration = 1.18;
-
-  try {
-    // 1. High-pitched descending Doppler whistle
-    const whistleOsc = ctx.createOscillator();
-    const whistleGain = ctx.createGain();
-    const whistleFilter = ctx.createBiquadFilter();
-
-    whistleOsc.type = 'sawtooth';
-    whistleOsc.frequency.setValueAtTime(1280, now);
-    whistleOsc.frequency.exponentialRampToValueAtTime(260, now + dropDuration);
-
-    whistleFilter.type = 'lowpass';
-    whistleFilter.frequency.setValueAtTime(1600, now);
-    whistleFilter.frequency.exponentialRampToValueAtTime(450, now + dropDuration);
-
-    whistleGain.gain.setValueAtTime(0.01, now);
-    whistleGain.gain.linearRampToValueAtTime(0.18, now + dropDuration * 0.7);
-    whistleGain.gain.exponentialRampToValueAtTime(0.001, now + dropDuration);
-
-    whistleOsc.connect(whistleFilter);
-    whistleFilter.connect(whistleGain);
-    whistleGain.connect(ctx.destination);
-
-    whistleOsc.start(now);
-    whistleOsc.stop(now + dropDuration);
-
-    // 2. High-speed rushing wind / atmospheric friction
-    const noiseBuffer = createNoiseBuffer(ctx, dropDuration + 0.1);
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-
-    const windFilter = ctx.createBiquadFilter();
-    windFilter.type = 'bandpass';
-    windFilter.frequency.setValueAtTime(550, now);
-    windFilter.frequency.linearRampToValueAtTime(1100, now + dropDuration);
-    windFilter.Q.setValueAtTime(2.2, now);
-
-    const windGain = ctx.createGain();
-    windGain.gain.setValueAtTime(0.02, now);
-    windGain.gain.linearRampToValueAtTime(0.16, now + dropDuration * 0.85);
-    windGain.gain.exponentialRampToValueAtTime(0.001, now + dropDuration);
-
-    noiseSource.connect(windFilter);
-    windFilter.connect(windGain);
-    windGain.connect(ctx.destination);
-
-    noiseSource.start(now);
-    noiseSource.stop(now + dropDuration);
-  } catch (e) {
-    console.debug('Error in atomic bomb drop sound:', e);
+  if (!ctx) {
+    // Attempt standard HTMLAudio fallback
+    try {
+      const audio = new Audio(url);
+      audio.volume = Math.min(1.0, options.volume ?? 1.0);
+      audio.play().catch(() => {
+        if (options.fallbackFn) options.fallbackFn();
+      });
+    } catch {
+      if (options.fallbackFn) options.fallbackFn();
+    }
+    return;
   }
-}
 
-/**
- * Colossal nuclear detonation sound matching the video reference:
- * - Supersonic impact shock crack
- * - Sub-bass detonation thump (140Hz -> 20Hz) with distortion
- * - Massive roaring resonant blast sweeping across low-pass
- * - Long sustained rolling thunder / shockwave reverberation (3.8s)
- * - Flash-boiling water steam sizzle
- */
-export function playAtomicBombExplosionSound() {
-  if (isAudioMuted()) return;
-  const ctx = getAudioContext();
-  if (!ctx) return;
+  const {
+    volume = 1.0,
+    subFreqStart = 80,
+    subFreqEnd = 24,
+    subDuration = 1.0,
+    subGain = 0.5,
+    fallbackFn,
+  } = options;
 
   const now = ctx.currentTime;
 
-  try {
-    // -------------------------------------------------------------
-    // LAYER 1: Initial Detonation Impact Crack (Sharp Transient Shock)
-    // -------------------------------------------------------------
-    const crackOsc = ctx.createOscillator();
-    const crackGain = ctx.createGain();
-    crackOsc.type = 'triangle';
-    crackOsc.frequency.setValueAtTime(320, now);
-    crackOsc.frequency.exponentialRampToValueAtTime(30, now + 0.1);
-
-    crackGain.gain.setValueAtTime(0.7, now);
-    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-
-    crackOsc.connect(crackGain);
-    crackGain.connect(ctx.destination);
-    crackOsc.start(now);
-    crackOsc.stop(now + 0.13);
-
-    // -------------------------------------------------------------
-    // LAYER 2: Massive Sub-Bass Blast (Chest-Rattling Nuclear Boom)
-    // -------------------------------------------------------------
-    const subOsc1 = ctx.createOscillator();
-    const subOsc2 = ctx.createOscillator();
-    const subGain = ctx.createGain();
-    const distortion = ctx.createWaveShaper();
-    distortion.curve = makeDistortionCurve(18);
-    distortion.oversample = '2x';
-
-    subOsc1.type = 'sine';
-    subOsc1.frequency.setValueAtTime(140, now);
-    subOsc1.frequency.exponentialRampToValueAtTime(26, now + 1.2);
-
-    subOsc2.type = 'triangle';
-    subOsc2.frequency.setValueAtTime(95, now);
-    subOsc2.frequency.exponentialRampToValueAtTime(18, now + 1.8);
-
-    subGain.gain.setValueAtTime(1.1, now);
-    subGain.gain.exponentialRampToValueAtTime(0.4, now + 0.5);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
-
-    subOsc1.connect(subGain);
-    subOsc2.connect(subGain);
-    subGain.connect(distortion);
-    distortion.connect(ctx.destination);
-
-    subOsc1.start(now);
-    subOsc2.start(now);
-    subOsc1.stop(now + 2.3);
-    subOsc2.stop(now + 2.3);
-
-    // -------------------------------------------------------------
-    // LAYER 3: Immense Roaring Nuclear Blast (Swept Resonant Noise)
-    // -------------------------------------------------------------
-    const noiseBuffer = createNoiseBuffer(ctx, 3.8);
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-
-    const filter1 = ctx.createBiquadFilter();
-    filter1.type = 'lowpass';
-    filter1.frequency.setValueAtTime(2400, now);
-    filter1.frequency.exponentialRampToValueAtTime(45, now + 2.8);
-    filter1.Q.setValueAtTime(4.8, now); // Powerful resonance for cinematic tearing explosion
-
-    const filter2 = ctx.createBiquadFilter();
-    filter2.type = 'lowpass';
-    filter2.frequency.setValueAtTime(1900, now);
-    filter2.frequency.exponentialRampToValueAtTime(38, now + 3.2);
-    filter2.Q.setValueAtTime(2.2, now);
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(1.25, now);
-    noiseGain.gain.linearRampToValueAtTime(0.95, now + 0.2);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 3.6);
-
-    noiseSource.connect(filter1);
-    filter1.connect(filter2);
-    filter2.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-
-    noiseSource.start(now);
-    noiseSource.stop(now + 3.8);
-
-    // -------------------------------------------------------------
-    // LAYER 4: Deep Rolling Sea Shockwave Rumble Echo (0.15s to 3.8s)
-    // -------------------------------------------------------------
-    const rumbleOsc1 = ctx.createOscillator();
-    const rumbleOsc2 = ctx.createOscillator();
-    const rumbleGain = ctx.createGain();
-
-    rumbleOsc1.type = 'sine';
-    rumbleOsc1.frequency.setValueAtTime(48, now + 0.15);
-    rumbleOsc1.frequency.exponentialRampToValueAtTime(16, now + 3.6);
-
-    rumbleOsc2.type = 'triangle';
-    rumbleOsc2.frequency.setValueAtTime(36, now + 0.15);
-    rumbleOsc2.frequency.exponentialRampToValueAtTime(14, now + 3.6);
-
-    rumbleGain.gain.setValueAtTime(0, now);
-    rumbleGain.gain.setValueAtTime(0.65, now + 0.15);
-    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
-
-    rumbleOsc1.connect(rumbleGain);
-    rumbleOsc2.connect(rumbleGain);
-    rumbleGain.connect(ctx.destination);
-
-    rumbleOsc1.start(now + 0.15);
-    rumbleOsc2.start(now + 0.15);
-    rumbleOsc1.stop(now + 3.9);
-    rumbleOsc2.stop(now + 3.9);
-
-    // -------------------------------------------------------------
-    // LAYER 5: Flash-Boiling Ocean Steam & Sizzle (0.2s to 2.8s)
-    // -------------------------------------------------------------
-    const steamBuffer = createNoiseBuffer(ctx, 2.8);
-    const steamSource = ctx.createBufferSource();
-    steamSource.buffer = steamBuffer;
-
-    const steamHighpass = ctx.createBiquadFilter();
-    steamHighpass.type = 'highpass';
-    steamHighpass.frequency.setValueAtTime(2200, now + 0.2);
-
-    const steamGain = ctx.createGain();
-    steamGain.gain.setValueAtTime(0, now);
-    steamGain.gain.setValueAtTime(0.22, now + 0.25);
-    steamGain.gain.exponentialRampToValueAtTime(0.001, now + 2.7);
-
-    steamSource.connect(steamHighpass);
-    steamHighpass.connect(steamGain);
-    steamGain.connect(ctx.destination);
-
-    steamSource.start(now + 0.2);
-    steamSource.stop(now + 2.8);
-
-  } catch (e) {
-    console.debug('Error in atomic bomb explosion sound:', e);
+  // Add physical sub-bass acoustic pressure wave
+  if (subGain > 0) {
+    playSubBassConcussion(ctx, now, subFreqStart, subFreqEnd, subDuration, subGain);
   }
+
+  // If buffer is already decoded in memory, play with sample-level accuracy
+  const cached = audioBufferCache.get(url);
+  if (cached) {
+    try {
+      const source = ctx.createBufferSource();
+      source.buffer = cached;
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(volume, now);
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      source.start(now);
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+
+  // Not in RAM yet: play HTML5 audio immediately for zero-lag sound, and warm the buffer cache
+  try {
+    const audio = new Audio(url);
+    audio.volume = Math.min(1.0, volume);
+    audio.play().catch(() => {
+      if (fallbackFn) fallbackFn();
+    });
+  } catch {
+    if (fallbackFn) fallbackFn();
+  }
+
+  // Background decode for future shots
+  loadAudioBuffer(ctx, url).catch(() => {});
 }
 
-/**
- * Sound of the small missile flying rapidly towards target:
- * High-speed Doppler whistle + agile rocket thruster hiss
- * Exactly matches the video reference (fast, snappy 0.75s flight).
- */
+/* =========================================================================
+   1. SMALL ROCKET (صاروخ صغير)
+   Real missile flight whoosh + crisp tactical detonation & flying debris
+   ========================================================================= */
+
 export function playSmallRocketIncomingSound() {
-  if (isAudioMuted()) return;
+  playRealisticSample(WEAPON_AUDIO_URLS.smallRocketIncoming, {
+    volume: 0.95,
+    subGain: 0,
+    fallbackFn: synthesizeSmallRocketIncoming,
+  });
+}
+
+export function playSmallRocketExplosionSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.smallRocketExplosion, {
+    volume: 1.0,
+    subFreqStart: 160,
+    subFreqEnd: 36,
+    subDuration: 0.7,
+    subGain: 0.75,
+    fallbackFn: synthesizeSmallRocketExplosion,
+  });
+}
+
+/* =========================================================================
+   2. MEDIUM ROCKET (صاروخ متوسط)
+   Cruise missile jet roar + heavy ordnance booming explosion & rolling shockwave
+   ========================================================================= */
+
+export function playMediumRocketIncomingSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.mediumRocketIncoming, {
+    volume: 0.95,
+    subGain: 0,
+    fallbackFn: synthesizeMediumRocketIncoming,
+  });
+}
+
+export function playMediumRocketExplosionSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.mediumRocketExplosion, {
+    volume: 1.0,
+    subFreqStart: 140,
+    subFreqEnd: 28,
+    subDuration: 1.2,
+    subGain: 0.9,
+    fallbackFn: synthesizeMediumRocketExplosion,
+  });
+}
+
+/* =========================================================================
+   3. LARGE ROCKET (صاروخ كبير)
+   Supersonic ballistic missile scream + massive anti-ship warhead blast & ocean rumble
+   ========================================================================= */
+
+export function playLargeRocketIncomingSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.largeRocketIncoming, {
+    volume: 1.0,
+    subGain: 0,
+    fallbackFn: synthesizeLargeRocketIncoming,
+  });
+}
+
+export function playLargeRocketExplosionSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.largeRocketExplosion, {
+    volume: 1.0,
+    subFreqStart: 120,
+    subFreqEnd: 22,
+    subDuration: 1.8,
+    subGain: 1.1,
+    fallbackFn: synthesizeLargeRocketExplosion,
+  });
+}
+
+/* =========================================================================
+   4. ATOMIC BOMB (قنبلة ذرية)
+   High-altitude atmospheric falling whistle + colossal thermonuclear shockwave
+   ========================================================================= */
+
+export function playAtomicBombDropSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.atomicBombDrop, {
+    volume: 1.0,
+    subGain: 0,
+    fallbackFn: synthesizeAtomicBombDrop,
+  });
+}
+
+export function playAtomicBombExplosionSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.atomicBombExplosion, {
+    volume: 1.0,
+    subFreqStart: 95,
+    subFreqEnd: 16,
+    subDuration: 3.2,
+    subGain: 1.25,
+    fallbackFn: synthesizeAtomicBombExplosion,
+  });
+}
+
+/* =========================================================================
+   5. MEDIA / SMOKE BOMB (قنبلة إعلانية / دخانية)
+   Concussive dispersion pop + pressurized expanding smoke release
+   ========================================================================= */
+
+export function playMediaBombExplosionSound() {
+  playRealisticSample(WEAPON_AUDIO_URLS.mediaBombExplosion, {
+    volume: 0.9,
+    subFreqStart: 140,
+    subFreqEnd: 45,
+    subDuration: 0.5,
+    subGain: 0.5,
+    fallbackFn: synthesizeSmallRocketExplosion,
+  });
+}
+
+/* =========================================================================
+   PROCEDURAL SYNTHESIS FALLBACKS
+   High-quality multi-layer synthesis fallback if audio files cannot load
+   ========================================================================= */
+
+function synthesizeSmallRocketIncoming() {
   const ctx = getAudioContext();
   if (!ctx) return;
-
   const now = ctx.currentTime;
-  const flightDuration = 0.75;
-
+  const duration = 0.75;
   try {
-    // 1. High-pitched fast Doppler whistle (1750Hz -> 420Hz)
-    const whistleOsc = ctx.createOscillator();
-    const whistleGain = ctx.createGain();
-    whistleOsc.type = 'sawtooth';
-    whistleOsc.frequency.setValueAtTime(1750, now);
-    whistleOsc.frequency.exponentialRampToValueAtTime(420, now + flightDuration);
-
-    whistleGain.gain.setValueAtTime(0.01, now);
-    whistleGain.gain.linearRampToValueAtTime(0.16, now + flightDuration * 0.7);
-    whistleGain.gain.exponentialRampToValueAtTime(0.001, now + flightDuration);
-
-    whistleOsc.connect(whistleGain);
-    whistleGain.connect(ctx.destination);
-    whistleOsc.start(now);
-    whistleOsc.stop(now + flightDuration);
-
-    // 2. High-speed rushing thruster wind
-    const noiseBuffer = createNoiseBuffer(ctx, flightDuration + 0.1);
-    const noiseSource = ctx.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.setValueAtTime(650, now);
-    bandpass.frequency.linearRampToValueAtTime(1250, now + flightDuration);
-    bandpass.Q.setValueAtTime(2.2, now);
-
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.03, now);
-    noiseGain.gain.linearRampToValueAtTime(0.2, now + flightDuration * 0.8);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + flightDuration);
-
-    noiseSource.connect(bandpass);
-    bandpass.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-
-    noiseSource.start(now);
-    noiseSource.stop(now + flightDuration);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1750, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + duration);
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.18, now + duration * 0.7);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
   } catch (e) {
-    console.debug('Error in small rocket incoming sound:', e);
+    console.debug(e);
   }
 }
 
-/**
- * Sound of the small missile detonation & punchy cartoon explosion:
- * Matches the video reference exactly:
- * - Crisp supersonic crack / snap punch (transient start)
- * - Punchy arcade mid-bass thump (220Hz -> 45Hz) with warm saturation
- * - Roaring comic blast noise sweeping down through resonant low-pass
- * - Snappy smoke sizzle tail (~0.7s)
- */
-export function playSmallRocketExplosionSound() {
-  if (isAudioMuted()) return;
+function synthesizeSmallRocketExplosion() {
   const ctx = getAudioContext();
   if (!ctx) return;
-
   const now = ctx.currentTime;
-
   try {
-    // -------------------------------------------------------------
-    // LAYER 1: Initial Supersonic Snap (Sharp Transient Punch)
-    // -------------------------------------------------------------
     const crackOsc = ctx.createOscillator();
     const crackGain = ctx.createGain();
     crackOsc.type = 'triangle';
     crackOsc.frequency.setValueAtTime(390, now);
     crackOsc.frequency.exponentialRampToValueAtTime(50, now + 0.05);
-
-    crackGain.gain.setValueAtTime(0.65, now);
+    crackGain.gain.setValueAtTime(0.7, now);
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
-
     crackOsc.connect(crackGain);
     crackGain.connect(ctx.destination);
     crackOsc.start(now);
     crackOsc.stop(now + 0.07);
 
-    // -------------------------------------------------------------
-    // LAYER 2: Punchy Arcade Detonation Thump (220Hz -> 45Hz)
-    // -------------------------------------------------------------
-    const subOsc = ctx.createOscillator();
-    const subGain = ctx.createGain();
-    const distortion = ctx.createWaveShaper();
-    distortion.curve = makeDistortionCurve(10);
-    distortion.oversample = '2x';
-
-    subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(220, now);
-    subOsc.frequency.exponentialRampToValueAtTime(45, now + 0.45);
-
-    subGain.gain.setValueAtTime(0.85, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-
-    subOsc.connect(subGain);
-    subGain.connect(distortion);
-    distortion.connect(ctx.destination);
-
-    subOsc.start(now);
-    subOsc.stop(now + 0.6);
-
-    // -------------------------------------------------------------
-    // LAYER 3: Snappy Comic Blast Noise (Resonant Filter Sweep)
-    // The crisp, tearing arcade explosion punch seen in the video
-    // -------------------------------------------------------------
-    const noiseBuffer = createNoiseBuffer(ctx, 0.9);
+    const noiseBuffer = createNoiseBuffer(ctx, 1.2);
     const noiseSource = ctx.createBufferSource();
     noiseSource.buffer = noiseBuffer;
-
-    const filter1 = ctx.createBiquadFilter();
-    filter1.type = 'lowpass';
-    filter1.frequency.setValueAtTime(2600, now);
-    filter1.frequency.exponentialRampToValueAtTime(130, now + 0.65);
-    filter1.Q.setValueAtTime(4.2, now); // Sharp arcade bite
-
-    const filter2 = ctx.createBiquadFilter();
-    filter2.type = 'lowpass';
-    filter2.frequency.setValueAtTime(2100, now);
-    filter2.frequency.exponentialRampToValueAtTime(100, now + 0.65);
-    filter2.Q.setValueAtTime(2.0, now);
-
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2600, now);
+    filter.frequency.exponentialRampToValueAtTime(120, now + 0.8);
+    filter.Q.setValueAtTime(3.5, now);
     const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0.9, now);
-    noiseGain.gain.linearRampToValueAtTime(0.7, now + 0.08);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
-
-    noiseSource.connect(filter1);
-    filter1.connect(filter2);
-    filter2.connect(noiseGain);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    noiseSource.connect(filter);
+    filter.connect(noiseGain);
     noiseGain.connect(ctx.destination);
-
     noiseSource.start(now);
-    noiseSource.stop(now + 0.8);
-
-    // -------------------------------------------------------------
-    // LAYER 4: Expanding Smoke Puffs Sizzle Tail
-    // -------------------------------------------------------------
-    const smokeBuffer = createNoiseBuffer(ctx, 0.7);
-    const smokeSource = ctx.createBufferSource();
-    smokeSource.buffer = smokeBuffer;
-
-    const smokeHighpass = ctx.createBiquadFilter();
-    smokeHighpass.type = 'highpass';
-    smokeHighpass.frequency.setValueAtTime(1800, now + 0.08);
-
-    const smokeGain = ctx.createGain();
-    smokeGain.gain.setValueAtTime(0, now);
-    smokeGain.gain.setValueAtTime(0.16, now + 0.12);
-    smokeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
-
-    smokeSource.connect(smokeHighpass);
-    smokeHighpass.connect(smokeGain);
-    smokeGain.connect(ctx.destination);
-
-    smokeSource.start(now + 0.08);
-    smokeSource.stop(now + 0.7);
-
+    noiseSource.stop(now + 0.95);
   } catch (e) {
-    console.debug('Error in small rocket explosion sound synthesis:', e);
+    console.debug(e);
   }
 }
 
+function synthesizeMediumRocketIncoming() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const duration = 0.9;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1550, now);
+    osc.frequency.exponentialRampToValueAtTime(310, now + duration);
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.2, now + duration * 0.75);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (e) {
+    console.debug(e);
+  }
+}
 
+function synthesizeMediumRocketExplosion() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  try {
+    const crackOsc = ctx.createOscillator();
+    const crackGain = ctx.createGain();
+    crackOsc.type = 'sawtooth';
+    crackOsc.frequency.setValueAtTime(320, now);
+    crackOsc.frequency.exponentialRampToValueAtTime(35, now + 0.08);
+    crackGain.gain.setValueAtTime(0.8, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    crackOsc.connect(crackGain);
+    crackGain.connect(ctx.destination);
+    crackOsc.start(now);
+    crackOsc.stop(now + 0.1);
+
+    const noiseBuffer = createNoiseBuffer(ctx, 1.8);
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(3000, now);
+    filter.frequency.exponentialRampToValueAtTime(90, now + 1.1);
+    filter.Q.setValueAtTime(3.8, now);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.95, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+    noiseSource.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseSource.start(now);
+    noiseSource.stop(now + 1.25);
+  } catch (e) {
+    console.debug(e);
+  }
+}
+
+function synthesizeLargeRocketIncoming() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const duration = 1.3;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1350, now);
+    osc.frequency.exponentialRampToValueAtTime(360, now + duration);
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + duration * 0.75);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (e) {
+    console.debug(e);
+  }
+}
+
+function synthesizeLargeRocketExplosion() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  try {
+    const crackOsc = ctx.createOscillator();
+    const crackGain = ctx.createGain();
+    crackOsc.type = 'triangle';
+    crackOsc.frequency.setValueAtTime(280, now);
+    crackOsc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+    crackGain.gain.setValueAtTime(0.6, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    crackOsc.connect(crackGain);
+    crackGain.connect(ctx.destination);
+    crackOsc.start(now);
+    crackOsc.stop(now + 0.1);
+
+    const noiseBuffer = createNoiseBuffer(ctx, 2.5);
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2200, now);
+    filter.frequency.exponentialRampToValueAtTime(75, now + 1.6);
+    filter.Q.setValueAtTime(4.0, now);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.95, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+    noiseSource.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseSource.start(now);
+    noiseSource.stop(now + 2.1);
+  } catch (e) {
+    console.debug(e);
+  }
+}
+
+function synthesizeAtomicBombDrop() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const duration = 1.18;
+  try {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1280, now);
+    osc.frequency.exponentialRampToValueAtTime(260, now + duration);
+    gain.gain.setValueAtTime(0.01, now);
+    gain.gain.linearRampToValueAtTime(0.2, now + duration * 0.7);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  } catch (e) {
+    console.debug(e);
+  }
+}
+
+function synthesizeAtomicBombExplosion() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  try {
+    const crackOsc = ctx.createOscillator();
+    const crackGain = ctx.createGain();
+    crackOsc.type = 'triangle';
+    crackOsc.frequency.setValueAtTime(320, now);
+    crackOsc.frequency.exponentialRampToValueAtTime(30, now + 0.1);
+    crackGain.gain.setValueAtTime(0.8, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    crackOsc.connect(crackGain);
+    crackGain.connect(ctx.destination);
+    crackOsc.start(now);
+    crackOsc.stop(now + 0.13);
+
+    const noiseBuffer = createNoiseBuffer(ctx, 4.0);
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(2400, now);
+    filter.frequency.exponentialRampToValueAtTime(45, now + 3.0);
+    filter.Q.setValueAtTime(4.8, now);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(1.2, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 3.8);
+    noiseSource.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noiseSource.start(now);
+    noiseSource.stop(now + 4.0);
+  } catch (e) {
+    console.debug(e);
+  }
+}
+
+/**
+ * Realistic heavy ordnance ocean water plunge & penetration splash sound
+ */
+export function playWaterPlungeSound() {
+  if (isAudioMuted()) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  try {
+    // 1. Water displacement gulp / dive tone
+    const diveOsc = ctx.createOscillator();
+    const diveGain = ctx.createGain();
+    diveOsc.type = 'sine';
+    diveOsc.frequency.setValueAtTime(580, now);
+    diveOsc.frequency.exponentialRampToValueAtTime(95, now + 0.38);
+    diveGain.gain.setValueAtTime(0.45, now);
+    diveGain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+    diveOsc.connect(diveGain);
+    diveGain.connect(ctx.destination);
+    diveOsc.start(now);
+    diveOsc.stop(now + 0.45);
+
+    // 2. Foaming water surface splash spray noise
+    const splashBuffer = createNoiseBuffer(ctx, 0.65);
+    const splashSource = ctx.createBufferSource();
+    splashSource.buffer = splashBuffer;
+    const splashFilter = ctx.createBiquadFilter();
+    splashFilter.type = 'bandpass';
+    splashFilter.frequency.setValueAtTime(2200, now);
+    splashFilter.frequency.exponentialRampToValueAtTime(380, now + 0.55);
+    splashFilter.Q.setValueAtTime(2.2, now);
+    const splashGain = ctx.createGain();
+    splashGain.gain.setValueAtTime(0.7, now);
+    splashGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    splashSource.connect(splashFilter);
+    splashFilter.connect(splashGain);
+    splashGain.connect(ctx.destination);
+    splashSource.start(now);
+    splashSource.stop(now + 0.65);
+  } catch (e) {
+    console.debug(e);
+  }
+}
