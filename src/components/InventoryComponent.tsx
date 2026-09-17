@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GOLD_COIN_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG } from '../data';
+import { GOLD_COIN_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, WEAPONS_DATA } from '../data';
 
 interface InventoryComponentProps {
   gold: number;
@@ -556,18 +556,52 @@ export default function InventoryComponent({
     showToast(`✅ تم استخدام [${name}] بنجاح وتفعيل خصائصه!`);
   };
 
-  const buyOrUseWeapon = (id: string, name: string, priceGold: number) => {
-    const currentQty = weapons[id] || 0;
+  const buyOrUseWeapon = (id: string, name: string, price: number, costType: 'gold' | 'gems' = 'gold') => {
+    const currentQty = weapons[id] || (id === 'adBomb' ? weapons.adBomb : 0) || (id === 'atomicBomb' ? weapons.atomicBomb : 0) || (id === 'smallRocket' ? weapons.smallRocket : 0) || (id === 'mediumRocket' ? weapons.mediumRocket : 0) || (id === 'largeRocket' ? weapons.largeRocket : 0) || 0;
     if (currentQty > 0) {
-      setWeapons(prev => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) - 1) }));
+      setWeapons(prev => ({
+        ...prev,
+        [id]: Math.max(0, (prev[id] || 0) - 1),
+        ...(id === 'adBomb' ? { emp_bomb: Math.max(0, (prev.emp_bomb || 0) - 1) } : {}),
+        ...(id === 'atomicBomb' ? { nuke_bomb: Math.max(0, (prev.nuke_bomb || 0) - 1) } : {}),
+        ...(id === 'smallRocket' ? { small_missile: Math.max(0, (prev.small_missile || 0) - 1) } : {}),
+        ...(id === 'mediumRocket' ? { medium_missile: Math.max(0, (prev.medium_missile || 0) - 1) } : {}),
+        ...(id === 'largeRocket' ? { large_missile: Math.max(0, (prev.large_missile || 0) - 1) } : {})
+      }));
       showToast(`🚀 تم إطلاق [${name}] على الأهداف بنجاح!`);
     } else {
-      if (gold >= priceGold) {
-        setGold(prev => prev - priceGold);
-        setWeapons(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-        showToast(`🪙 تم شراء [${name}] بمبلغ ${priceGold.toLocaleString()} ذهب!`);
+      if (costType === 'gems') {
+        if (gems >= price) {
+          setGems(prev => prev - price);
+          setWeapons(prev => ({
+            ...prev,
+            [id]: (prev[id] || 0) + 1,
+            ...(id === 'adBomb' ? { emp_bomb: (prev.emp_bomb || 0) + 1 } : {}),
+            ...(id === 'atomicBomb' ? { nuke_bomb: (prev.nuke_bomb || 0) + 1 } : {}),
+            ...(id === 'smallRocket' ? { small_missile: (prev.small_missile || 0) + 1 } : {}),
+            ...(id === 'mediumRocket' ? { medium_missile: (prev.medium_missile || 0) + 1 } : {}),
+            ...(id === 'largeRocket' ? { large_missile: (prev.large_missile || 0) + 1 } : {})
+          }));
+          showToast(`💎 تم شراء [${name}] بمبلغ ${price} جوهرة!`);
+        } else {
+          showToast(`❌ الجواهر غير كافية! تحتاج إلى ${price} 💎 جوهرة.`);
+        }
       } else {
-        showToast(`❌ الذهب غير كافٍ! تحتاج إلى ${priceGold.toLocaleString()} 🪙 ذهب.`);
+        if (gold >= price) {
+          setGold(prev => prev - price);
+          setWeapons(prev => ({
+            ...prev,
+            [id]: (prev[id] || 0) + 1,
+            ...(id === 'adBomb' ? { emp_bomb: (prev.emp_bomb || 0) + 1 } : {}),
+            ...(id === 'atomicBomb' ? { nuke_bomb: (prev.nuke_bomb || 0) + 1 } : {}),
+            ...(id === 'smallRocket' ? { small_missile: (prev.small_missile || 0) + 1 } : {}),
+            ...(id === 'mediumRocket' ? { medium_missile: (prev.medium_missile || 0) + 1 } : {}),
+            ...(id === 'largeRocket' ? { large_missile: (prev.large_missile || 0) + 1 } : {})
+          }));
+          showToast(`🪙 تم شراء [${name}] بمبلغ ${price.toLocaleString()} ذهب!`);
+        } else {
+          showToast(`❌ الذهب غير كافٍ! تحتاج إلى ${price.toLocaleString()} 🪙 ذهب.`);
+        }
       }
     }
   };
@@ -1300,168 +1334,143 @@ export default function InventoryComponent({
         {/* ==================== TAB 2: أسلحة ==================== */}
         {activeTab === 'weapons' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
-            {[
-              {
-                id: 'small_missile',
-                title: 'صاروخ صغير',
-                price: 800,
-                qty: weapons['small_missile'] || weapons['smallRocket'] || 4,
-                icon: '🚀',
-                image: WEAPON_SMALL_MISSILE_ICON,
-                desc: 'صاروخ خفيف لتوجيه ضربة سريعة لسفن الأعداء',
-              },
-              {
-                id: 'medium_missile',
-                title: 'صاروخ متوسط',
-                price: 4000,
-                qty: weapons['medium_missile'] || weapons['mediumRocket'] || 0,
-                icon: '🚀',
-                image: WEAPON_MEDIUM_MISSILE_ICON,
-                desc: 'صاروخ متوسط القوة يتسبب بأضرار بالغة للهيكل',
-              },
-              {
-                id: 'large_missile',
-                title: 'صاروخ كبير',
-                price: 18000,
-                qty: weapons['large_missile'] || weapons['largeRocket'] || 0,
-                icon: '🚀',
-                image: WEAPON_LARGE_MISSILE_ICON,
-                desc: 'صاروخ ضخم يدمر الأرصفة والدفاعات الساحلية',
-              },
-              {
-                id: 'nuke_bomb',
-                title: 'قنبلة ذرية',
-                price: 72000,
-                qty: weapons['nuke_bomb'] || weapons['atomicBomb'] || 0,
-                icon: '💣',
-                image: WEAPON_ATOMIC_BOMB_ICON,
-                desc: 'قنبلة ذات أضرار شاملة تعطل الأسطول بالكامل',
-              },
-              {
-                id: 'emp_bomb',
-                title: 'قنبلة إعلامية',
-                price: 70000,
-                qty: weapons['emp_bomb'] || weapons['adBomb'] || 0,
-                icon: '📡',
-                image: WEAPON_MEDIA_BOMB_ICON,
-                desc: 'قنبلة تشويش إلكتروني تعطل الرادار والملاحة',
-              },
-            ].map(item => (
-              <div
-                key={item.id}
-                style={{
-                  background: 'linear-gradient(to bottom, #0f1d3e, #0a142c)',
-                  border: '1.5px solid rgba(59, 130, 246, 0.4)',
-                  borderRadius: '16px',
-                  padding: '14px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  textAlign: 'center',
-                  boxShadow: '0 6px 18px rgba(0,0,0,0.5)',
-                  position: 'relative',
-                }}
-              >
+            {WEAPONS_DATA.map(item => {
+              const currentQty = weapons[item.key] || weapons[item.id] || (item.key === 'adBomb' ? weapons.emp_bomb : 0) || (item.key === 'atomicBomb' ? weapons.nuke_bomb : 0) || (item.key === 'smallRocket' ? weapons.small_missile : 0) || (item.key === 'mediumRocket' ? weapons.medium_missile : 0) || (item.key === 'largeRocket' ? weapons.large_missile : 0) || 0;
+              return (
                 <div
+                  key={item.id}
                   style={{
-                    position: 'absolute',
-                    top: '8px',
-                    left: '8px',
-                    background: item.qty > 0 ? '#16a34a' : 'rgba(239, 68, 68, 0.25)',
-                    color: item.qty > 0 ? '#ffffff' : '#fca5a5',
-                    border: item.qty > 0 ? '1px solid #4ade80' : '1px solid #ef4444',
-                    borderRadius: '8px',
-                    fontSize: '11.5px',
-                    fontWeight: 'bold',
-                    padding: '2px 8px',
-                  }}
-                >
-                  {item.qty > 0 ? `${item.qty}x` : 'لا تمتلك'}
-                </div>
-
-                <div
-                  style={{
-                    width: '100%',
-                    height: '115px',
-                    borderRadius: '12px',
-                    background: 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(10,20,44,0.8) 100%)',
-                    border: '1.5px solid rgba(234, 179, 8, 0.5)',
+                    background: 'linear-gradient(to bottom, #0f1d3e, #0a142c)',
+                    border: '1.5px solid rgba(59, 130, 246, 0.4)',
+                    borderRadius: '16px',
+                    padding: '14px 12px',
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '48px',
-                    margin: '8px 0 10px 0',
-                    overflow: 'hidden',
-                    boxShadow: 'inset 0 0 15px rgba(0,0,0,0.6)',
+                    textAlign: 'center',
+                    boxShadow: '0 6px 18px rgba(0,0,0,0.5)',
+                    position: 'relative',
                   }}
                 >
-                  {(item as any).image ? (
-                    <img 
-                      src={(item as any).image} 
-                      alt={item.title} 
-                      referrerPolicy="no-referrer" 
-                      style={{ maxHeight: '95px', maxWidth: '95px', width: 'auto', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.8))' }} 
-                    />
-                  ) : (
-                    <span>{item.icon}</span>
-                  )}
-                </div>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '8px',
+                      left: '8px',
+                      background: currentQty > 0 ? '#16a34a' : 'rgba(239, 68, 68, 0.25)',
+                      color: currentQty > 0 ? '#ffffff' : '#fca5a5',
+                      border: currentQty > 0 ? '1px solid #4ade80' : '1px solid #ef4444',
+                      borderRadius: '8px',
+                      fontSize: '11.5px',
+                      fontWeight: 'bold',
+                      padding: '2px 8px',
+                    }}
+                  >
+                    {currentQty > 0 ? `${currentQty}x` : 'لا تمتلك'}
+                  </div>
 
-                <div
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    color: '#facc15',
-                    marginBottom: '4px',
-                  }}
-                >
-                  {item.title}
-                </div>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '115px',
+                      borderRadius: '12px',
+                      background: 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(10,20,44,0.8) 100%)',
+                      border: '1.5px solid rgba(234, 179, 8, 0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '48px',
+                      margin: '8px 0 10px 0',
+                      overflow: 'hidden',
+                      boxShadow: 'inset 0 0 15px rgba(0,0,0,0.6)',
+                    }}
+                  >
+                    {item.image ? (
+                      <img 
+                        src={item.image} 
+                        alt={item.name} 
+                        referrerPolicy="no-referrer" 
+                        style={{ maxHeight: '95px', maxWidth: '95px', width: 'auto', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.8))' }} 
+                      />
+                    ) : (
+                      <span>{item.icon}</span>
+                    )}
+                  </div>
 
-                <div style={{ fontSize: '12.5px', color: '#fcd34d', fontWeight: 'bold', marginBottom: '6px' }}>
-                  🪙 {item.price.toLocaleString()} ذهب
-                </div>
+                  <div
+                    style={{
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      color: '#facc15',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {item.name}
+                  </div>
 
-                <div
-                  style={{
-                    fontSize: '11px',
-                    color: '#cbd5e1',
-                    lineHeight: '1.35',
-                    marginBottom: '12px',
-                    flex: 1,
-                    minHeight: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  {item.desc}
-                </div>
+                  {/* Damage Badge */}
+                  <div 
+                    style={{
+                      fontSize: '12px',
+                      color: '#fef08a',
+                      fontWeight: 'bold',
+                      background: 'rgba(234, 179, 8, 0.15)',
+                      border: '1px solid rgba(234, 179, 8, 0.4)',
+                      borderRadius: '6px',
+                      padding: '2px 8px',
+                      marginBottom: '6px'
+                    }}
+                  >
+                    ⚔️ الضرر: {item.damage.toLocaleString()}
+                  </div>
 
-                <button
-                  onClick={() => buyOrUseWeapon(item.id, item.title, item.price)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 0',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background:
-                      item.qty > 0
-                        ? 'linear-gradient(to bottom, #16a34a, #15803d)'
-                        : 'linear-gradient(to bottom, #ca8a04, #854d0e)',
-                    color: '#ffffff',
-                    fontWeight: 'bold',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    boxShadow:
-                      item.qty > 0
-                        ? '0 2px 10px rgba(22, 163, 74, 0.4)'
-                        : '0 2px 10px rgba(202, 138, 4, 0.4)',
-                  }}
-                >
-                  {item.qty > 0 ? 'إطلاق 🚀' : 'شراء 🪙'}
-                </button>
-              </div>
-            ))}
+                  <div style={{ fontSize: '12.5px', color: '#fcd34d', fontWeight: 'bold', marginBottom: '6px' }}>
+                    {item.costType === 'gold' ? `🪙 ${item.price.toLocaleString()} ذهب` : `💎 ${item.price} جوهرة`}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#cbd5e1',
+                      lineHeight: '1.35',
+                      marginBottom: '12px',
+                      flex: 1,
+                      minHeight: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {item.desc}
+                  </div>
+
+                  <button
+                    onClick={() => buyOrUseWeapon(item.key, item.name, item.price, item.costType)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 0',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background:
+                        currentQty > 0
+                          ? 'linear-gradient(to bottom, #16a34a, #15803d)'
+                          : item.costType === 'gold'
+                            ? 'linear-gradient(to bottom, #ca8a04, #854d0e)'
+                            : 'linear-gradient(to bottom, #2563eb, #1d4ed8)',
+                      color: '#ffffff',
+                      fontWeight: 'bold',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      boxShadow:
+                        currentQty > 0
+                          ? '0 2px 10px rgba(22, 163, 74, 0.4)'
+                          : '0 2px 10px rgba(0,0,0,0.4)',
+                    }}
+                  >
+                    {currentQty > 0 ? 'إطلاق 🚀' : (item.costType === 'gold' ? 'شراء 🪙' : 'شراء 💎')}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 

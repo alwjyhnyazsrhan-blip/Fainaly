@@ -242,6 +242,76 @@ export const WEAPON_MEDIUM_MISSILE_ICON = "https://raw.githubusercontent.com/alw
 export const WEAPON_LARGE_MISSILE_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-missile-large.png";
 export const WEAPON_MEDIA_BOMB_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-media-bomb.png";
 export const WEAPON_ATOMIC_BOMB_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-atomic-bomb.png";
+
+export interface WeaponItemData {
+  id: string;
+  key: string;
+  name: string;
+  damage: number;
+  price: number;
+  costType: 'gems' | 'gold';
+  icon: string;
+  image: string;
+  desc: string;
+}
+
+export const WEAPONS_DATA: WeaponItemData[] = [
+  {
+    id: 'adBomb',
+    key: 'adBomb',
+    name: 'رسالة التفجير',
+    damage: 20000,
+    price: 50,
+    costType: 'gems',
+    icon: '📡',
+    image: WEAPON_MEDIA_BOMB_ICON,
+    desc: 'رسالة تفجيرية فتاكة تلحق 20,000 ضرر بأسطول العدو',
+  },
+  {
+    id: 'atomicBomb',
+    key: 'atomicBomb',
+    name: 'قنبلة الموت الأسود',
+    damage: 70000,
+    price: 150,
+    costType: 'gems',
+    icon: '💣',
+    image: WEAPON_ATOMIC_BOMB_ICON,
+    desc: 'قنبلة الموت الأسود الكاسحة تلحق 70,000 ضرر وتدمر الميناء بالكامل',
+  },
+  {
+    id: 'smallRocket',
+    key: 'smallRocket',
+    name: 'صاروخ صغير',
+    damage: 1000,
+    price: 100000,
+    costType: 'gold',
+    icon: '🚀',
+    image: WEAPON_SMALL_MISSILE_ICON,
+    desc: 'صاروخ صغير وسريع لتوجيه ضربة مباشرة تلحق 1,000 ضرر',
+  },
+  {
+    id: 'mediumRocket',
+    key: 'mediumRocket',
+    name: 'صاروخ المتوسط',
+    damage: 5000,
+    price: 200000,
+    costType: 'gold',
+    icon: '🚀',
+    image: WEAPON_MEDIUM_MISSILE_ICON,
+    desc: 'صاروخ متوسط القوة يخترق الدروع ويلحق 5,000 ضرر بهيكل السفينة',
+  },
+  {
+    id: 'largeRocket',
+    key: 'largeRocket',
+    name: 'صاروخ كبير',
+    damage: 100000,
+    price: 300000,
+    costType: 'gold',
+    icon: '🚀',
+    image: WEAPON_LARGE_MISSILE_ICON,
+    desc: 'صاروخ كبير فتاك يزلزل الدفاعات ويلحق 100,000 ضرر',
+  },
+];
 export const SHIP_GUARDIAN_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/ship-guardian-cutout.png";
 export const SHIP_GUARDIAN_BG = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/pirate-card-background-extracted.jpg.png";
 export const FIXER_SMALL_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/person-small-mechanic.png";

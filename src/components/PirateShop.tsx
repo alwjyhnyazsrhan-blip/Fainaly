@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GOLD_COIN_ICON, PIRATE_SHOP_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS } from '../data';
+import { GOLD_COIN_ICON, PIRATE_SHOP_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS, WEAPONS_DATA } from '../data';
 import { executeFinancialTransaction, isNetworkOnline, notifyOfflineBlocked } from '../services/financialTransaction';
 
 import rechargeShellGems from '../assets/images/recharge_shell_gems_1787165355968.jpg';
@@ -909,95 +909,134 @@ export default function PirateShop({
               Weapons – ترسانة الصواريخ والقنابل المدمرة
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
-              {[
-                { key: 'smallRocket', title: 'صاروخ صغير', price: 1500, costType: 'gold', icon: '🚀', image: WEAPON_SMALL_MISSILE_ICON },
-                { key: 'mediumRocket', title: 'صاروخ متوسط', price: 15000, costType: 'gold', icon: '🚀', image: WEAPON_MEDIUM_MISSILE_ICON },
-                { key: 'largeRocket', title: 'صاروخ كبير', price: 90900, costType: 'gold', icon: '🚀', image: WEAPON_LARGE_MISSILE_ICON },
-                { key: 'atomicBomb', title: 'قنبلة ذرية', price: 100, costType: 'gems', icon: '💣', image: WEAPON_ATOMIC_BOMB_ICON },
-                { key: 'empBomb', title: 'قنبلة إعلامية', price: 180, costType: 'gems', icon: '📡', image: WEAPON_MEDIA_BOMB_ICON },
-              ].map(item => (
-                <div
-                  key={item.key}
-                  style={{
-                    background: 'linear-gradient(to bottom, rgba(42, 15, 5, 0.78), rgba(20, 6, 2, 0.86))',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    border: '1.5px solid rgba(249, 115, 22, 0.65)',
-                    borderRadius: '14px',
-                    padding: '14px 12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-                  }}
-                >
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+              {WEAPONS_DATA.map(item => {
+                const currentQty = weapons[item.key] || weapons[item.id] || 0;
+                return (
                   <div
+                    key={item.id}
                     style={{
-                      width: '100%',
-                      height: '96px',
+                      background: 'linear-gradient(to bottom, rgba(42, 15, 5, 0.88), rgba(20, 6, 2, 0.94))',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      border: '1.5px solid rgba(249, 115, 22, 0.65)',
+                      borderRadius: '14px',
+                      padding: '14px 12px',
                       display: 'flex',
+                      flexDirection: 'column',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '4px 0 10px 0',
-                      background: 'radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, rgba(20, 6, 2, 0.5) 100%)',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(249, 115, 22, 0.3)',
+                      textAlign: 'center',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                      position: 'relative',
                     }}
                   >
-                    {item.image ? (
-                      <img 
-                        src={item.image} 
-                        alt={item.title} 
-                        referrerPolicy="no-referrer" 
-                        style={{ maxHeight: '82px', maxWidth: '82px', objectFit: 'contain', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.7))' }} 
-                      />
-                    ) : (
-                      <span style={{ fontSize: '46px' }}>{item.icon}</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fdba74', marginBottom: '8px' }}>
-                    {item.title}
-                  </div>
+                    {/* Quantity Badge */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '8px',
+                        left: '8px',
+                        background: currentQty > 0 ? '#16a34a' : 'rgba(239, 68, 68, 0.3)',
+                        color: currentQty > 0 ? '#ffffff' : '#fca5a5',
+                        border: currentQty > 0 ? '1px solid #4ade80' : '1px solid #ef4444',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        padding: '1px 6px',
+                      }}
+                    >
+                      {currentQty > 0 ? `${currentQty}x` : '0'}
+                    </div>
 
-                  <button
-                    onClick={() => {
-                      if (item.costType === 'gold') {
-                        if (gold >= item.price) {
-                          setGold(prev => prev - item.price);
-                          setWeapons(prev => ({ ...prev, [item.key]: (prev[item.key] || 0) + 1 }));
-                          alert(`🚀 تم شراء [${item.title}] بـ ${item.price.toLocaleString()} 🪙 ذهب!`);
-                        } else {
-                          alert(`❌ الذهب غير كافٍ! تحتاج إلى ${item.price.toLocaleString()} 🪙 ذهب.`);
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '96px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '4px 0 8px 0',
+                        background: 'radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, rgba(20, 6, 2, 0.5) 100%)',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(249, 115, 22, 0.3)',
+                      }}
+                    >
+                      {item.image ? (
+                        <img 
+                          src={item.image} 
+                          alt={item.name} 
+                          referrerPolicy="no-referrer" 
+                          style={{ maxHeight: '82px', maxWidth: '82px', objectFit: 'contain', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.7))' }} 
+                        />
+                      ) : (
+                        <span style={{ fontSize: '46px' }}>{item.icon}</span>
+                      )}
+                    </div>
+
+                    <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fdba74', marginBottom: '4px' }}>
+                      {item.name}
+                    </div>
+
+                    {/* Damage Badge */}
+                    <div 
+                      style={{
+                        fontSize: '12px',
+                        color: '#fef08a',
+                        fontWeight: 'bold',
+                        background: 'rgba(234, 179, 8, 0.15)',
+                        border: '1px solid rgba(234, 179, 8, 0.4)',
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                        marginBottom: '8px'
+                      }}
+                    >
+                      ⚔️ الضرر: {item.damage.toLocaleString()}
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        if (buyWeaponItem) {
+                          buyWeaponItem(item.key, item.costType === 'gold' ? 'gold' : 'blueGems', item.price);
+                          return;
                         }
-                      } else {
-                        if (gems >= item.price) {
-                          setGems(prev => prev - item.price);
-                          setWeapons(prev => ({ ...prev, [item.key]: (prev[item.key] || 0) + 1 }));
-                          alert(`💥 تم شراء [${item.title}] بـ ${item.price} 💎 جوهرة!`);
+                        if (item.costType === 'gold') {
+                          if (gold >= item.price) {
+                            setGold(prev => prev - item.price);
+                            setWeapons(prev => ({ ...prev, [item.key]: (prev[item.key] || 0) + 1 }));
+                            alert(`🚀 تم شراء [${item.name}] بـ ${item.price.toLocaleString()} 🪙 ذهب!`);
+                          } else {
+                            alert(`❌ الذهب غير كافٍ! تحتاج إلى ${item.price.toLocaleString()} 🪙 ذهب.`);
+                          }
                         } else {
-                          alert(`❌ الجواهر غير كافية! تحتاج إلى ${item.price} 💎 جوهرة.`);
+                          if (gems >= item.price) {
+                            setGems(prev => prev - item.price);
+                            setWeapons(prev => ({ ...prev, [item.key]: (prev[item.key] || 0) + 1 }));
+                            alert(`💥 تم شراء [${item.name}] بـ ${item.price} 💎 جوهرة!`);
+                          } else {
+                            alert(`❌ الجواهر غير كافية! تحتاج إلى ${item.price} 💎 جوهرة.`);
+                          }
                         }
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      background: 'linear-gradient(to bottom, #f97316, #c2410c)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '10px',
-                      padding: '8px 0',
-                      fontSize: '13px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      boxShadow: '0 2px 10px rgba(249, 115, 22, 0.4)',
-                    }}
-                  >
-                    {item.costType === 'gold' ? `🪙 ${item.price.toLocaleString()}` : `💎 ${item.price}`}
-                  </button>
-                </div>
-              ))}
+                      }}
+                      style={{
+                        width: '100%',
+                        background: item.costType === 'gold' 
+                          ? 'linear-gradient(to bottom, #d97706, #b45309)'
+                          : 'linear-gradient(to bottom, #2563eb, #1d4ed8)',
+                        color: '#fff',
+                        border: item.costType === 'gold' ? '1px solid #fef08a' : '1px solid #93c5fd',
+                        borderRadius: '10px',
+                        padding: '8px 0',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+                      }}
+                    >
+                      {item.costType === 'gold' ? `🪙 ${item.price.toLocaleString()} ذهب` : `💎 ${item.price} جوهرة`}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

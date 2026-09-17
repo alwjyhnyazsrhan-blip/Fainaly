@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { ShipState, ChatMessage, Tribe, CrewMember, Quest, BattleReport, GlobalNotification, NotificationEventType } from './types';
-import { SHOP_SHIPS, FISH_REWARD_DATA, getHarborImageUrl, FISH_HOUSE_LEVELS, getFishHouseImageUrl, getFishHouseCapacity, getShipCapacity, GOLD_COIN_ICON, GEM_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS } from './data';
+import { SHOP_SHIPS, FISH_REWARD_DATA, getHarborImageUrl, FISH_HOUSE_LEVELS, getFishHouseImageUrl, getFishHouseCapacity, getShipCapacity, GOLD_COIN_ICON, GEM_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS, WEAPONS_DATA } from './data';
 import FishHouseComponent from './components/FishHouseComponent';
 import GoogleAccountSelector from './components/GoogleAccountSelector';
 import LandingScreen from './components/LandingScreen';
@@ -1285,7 +1285,7 @@ export default function App() {
           if (s.id === targetShip.id) {
             const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
             const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
-            const newHeart = Math.max(0, currentHeart - 800);
+            const newHeart = Math.max(0, currentHeart - 1000);
             return { ...s, heart: newHeart, ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {}) };
           }
           return s;
@@ -1304,14 +1304,14 @@ export default function App() {
           date: new Date().toISOString(),
           title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 استهداف سفينتك بصاروخ صغير!',
           log: [
-            `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ صغير ملحقاً 800 نقطة ضرر!`,
+            `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ صغير ملحقاً 1,000 نقطة ضرر!`,
             allDestroyed ? `🔥 دُمرت جميع سفن أسطولك وأصبح الميناء محترقاً ومدمراً بالكامل!` : `⚠️ قم بصيانة وإصلاح أضرار هيكل السفينة فوراً.`
           ]
         };
 
         // Secure collection-based dispatch to /harborEvents
         createHarborEvent(targetDocId, 'ROCKET_SMALL', {
-          damage: 800,
+          damage: 1000,
           targetShipId: targetShip.id,
           allDestroyed,
           newReport
@@ -1347,10 +1347,10 @@ export default function App() {
       sendSecureChatMessage(
         'القوات الصاروخية 🚀',
         '🚀',
-        `🚀 صاروخ صغير! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} وألحق بها 800 ضرر!`
+        `🚀 صاروخ صغير! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} وألحق بها 1,000 ضرر!`
       );
 
-      showToast("💥 تم إطلاق الصاروخ الصغير وإصابة السفينة بـ 800 ضرر!", "success");
+      showToast("💥 تم إطلاق الصاروخ الصغير وإصابة السفينة بـ 1,000 ضرر!", "success");
 
       // Reset screen shake after short punch
       setTimeout(() => {
@@ -1424,7 +1424,7 @@ export default function App() {
           if (s.id === targetShip.id) {
             const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
             const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
-            const newHeart = Math.max(0, currentHeart - 4000);
+            const newHeart = Math.max(0, currentHeart - 5000);
             return { ...s, heart: newHeart, ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {}) };
           }
           return s;
@@ -1443,14 +1443,14 @@ export default function App() {
           date: new Date().toISOString(),
           title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 استهداف سفينتك بصاروخ متوسط!',
           log: [
-            `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ متوسط ملحقاً 4,000 نقطة ضرر!`,
+            `🚀 قام القبطان @${username} باستهداف سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ متوسط ملحقاً 5,000 نقطة ضرر!`,
             allDestroyed ? `🔥 دُمرت جميع سفن أسطولك وأصبح الميناء محترقاً ومدمراً بالكامل!` : `⚠️ قم بصيانة وإصلاح أضرار هيكل السفينة فوراً.`
           ]
         };
 
         // Secure collection-based dispatch to /harborEvents
         createHarborEvent(targetDocId, 'ROCKET_MEDIUM', {
-          damage: 4000,
+          damage: 5000,
           targetShipId: targetShip.id,
           allDestroyed,
           newReport
@@ -1486,10 +1486,10 @@ export default function App() {
       sendSecureChatMessage(
         'القوات الصاروخية 🚀',
         '🚀',
-        `🚀 صاروخ متوسط! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} بـ 4,000 ضرر!`
+        `🚀 صاروخ متوسط! قصف القبطان @${username} سفينة القبطان @${inspectedPlayer.username} بـ 5,000 ضرر!`
       );
 
-      showToast("💥 تم إطلاق الصاروخ المتوسط وإصابة السفينة بـ 4,000 ضرر!", "success");
+      showToast("💥 تم إطلاق الصاروخ المتوسط وإصابة السفينة بـ 5,000 ضرر!", "success");
 
       // Reset screen shake after explosion punch
       setTimeout(() => {
@@ -1558,7 +1558,7 @@ export default function App() {
       // Play heavy cinematic explosion sound matching user reference
       playLargeRocketExplosionSound();
 
-      // Deal 18,000 damage
+      // Deal 100,000 damage
       const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
 
       if (targetShip && targetDocId) {
@@ -1566,7 +1566,7 @@ export default function App() {
         const updatedShips = baseShips.map((s: any) => {
           const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
           const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
-          const dmg = (s.id === targetShip.id) ? 18000 : 4000;
+          const dmg = (s.id === targetShip.id) ? 100000 : 25000;
           const newHeart = Math.max(0, currentHeart - dmg);
           return {
             ...s,
@@ -1588,14 +1588,14 @@ export default function App() {
           date: new Date().toISOString(),
           title: allDestroyed ? '🚨 تم تدمير أسطولك ومينائك بالكامل!' : '🚀 قصف صاروخي فتاك على سفينتك!',
           log: [
-            `🚀 قصف القبطان @${username} سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ كبير مدمّر بـ 18,000 ضرر!`,
+            `🚀 قصف القبطان @${username} سفينتك (${targetShip.name || 'سفينة الأسطول'}) بصاروخ كبير مدمّر بـ 100,000 ضرر!`,
             allDestroyed ? `🔥 دُمرت جميع سفن أسطولك بالكامل وأصبح الميناء محترقاً ومدمراً!` : `⚠️ تعرضت سفن الأسطول لأضرار جسيمة، توجه للصيانة والإصلاح فوراً.`
           ]
         };
 
         // Secure collection-based dispatch to /harborEvents
         createHarborEvent(targetDocId, 'ROCKET_LARGE', {
-          damage: 18000,
+          damage: 100000,
           targetShipId: targetShip.id,
           allDestroyed,
           newReport
@@ -1631,10 +1631,10 @@ export default function App() {
       sendSecureChatMessage(
         'القوات الصاروخية 🚀',
         '🚀',
-        `🚀 صاروخ كبير فتاك! قصف القبطان @${username} سفن القبطان @${inspectedPlayer.username} بقوة تدميرية بلغت 18,000 ضرر!`
+        `🚀 صاروخ كبير فتاك! قصف القبطان @${username} سفن القبطان @${inspectedPlayer.username} بقوة تدميرية بلغت 100,000 ضرر!`
       );
 
-      showToast("💥 تم إطلاق الصاروخ الكبير وإصابة الهدف بـ 18,000 ضرر!", "success");
+      showToast("💥 تم إطلاق الصاروخ الكبير وإصابة الهدف بـ 100,000 ضرر!", "success");
 
       // Impact camera shake lasts 650ms for realistic punch
       setTimeout(() => {
@@ -1729,33 +1729,42 @@ export default function App() {
           ? inspectedPlayer.ships
           : getInspectedPlayerShips(inspectedPlayer);
 
-        // Destroy and incinerate all ships
-        const updatedShips = baseShips.map((s: any) => ({
-          ...s,
-          heart: 0,
-          moving: false,
-          status: 'docked'
-        }));
+        // Deal 20,000 damage to all ships
+        let allDestroyed = false;
+        const updatedShips = baseShips.map((s: any) => {
+          const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
+          const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
+          const newHeart = Math.max(0, currentHeart - 20000);
+          return {
+            ...s,
+            heart: newHeart,
+            ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {})
+          };
+        });
+
+        allDestroyed = updatedShips.length > 0 && updatedShips.every((s: any) => typeof s.heart === 'number' && s.heart <= 0);
 
         const existingReports = Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports : [];
         const newReport = {
           id: `ad_bomb_${Date.now()}`,
           opponent: username,
-          opponentAvatar: avatar || '📢',
+          opponentAvatar: avatar || '📡',
           type: 'defense',
           result: 'defeat',
           goldChange: 0,
           date: new Date().toISOString(),
-          title: '🚨 هجوم إعلاني ساحق وتدمير للميناء!',
+          title: allDestroyed ? '🚨 رسالة التفجير: تم تدمير أسطولك ومينائك بالكامل!' : '📡 هجوم رسالة التفجير!',
           log: [
-            `📺 قام القبطان @${username} بتفجير قنبلة إعلانية مدمّرة [${adTitle}] على مينائك!`,
-            `🔥 احترقت جميع سفن أسطولك بالكامل ودُمر الميناء وأصبح محترقاً ومشتعلاً بالكامل!`,
+            `📡 قام القبطان @${username} بإطلاق رسالة التفجير [${adTitle}] على مينائك ملحقاً 20,000 نقطة ضرر بكل سفينة!`,
+            allDestroyed ? `🔥 دُمرت جميع سفن أسطولك بالكامل ودُمر الميناء وأصبح محترقاً ومشتعلاً!` : `⚠️ أصيبت سفن أسطولك بأضرار جسيمة، توجه للصيانة والترميم فوراً.`,
             `⚠️ توجه فوراً إلى الميناء واضغط على [إعادة إعمار الميناء وترميم الأسطول].`
           ]
         };
 
         // Secure collection-based dispatch to /harborEvents
         createHarborEvent(targetDocId, 'AD_BOMB', {
+          damage: 20000,
+          allDestroyed,
           adKey: selectedAdKey,
           adTitle,
           newReport
@@ -1764,7 +1773,7 @@ export default function App() {
         // Direct persistent update to target user profile document in Firestore
         if (targetDocId && db) {
           updateDoc(doc(db, 'users', targetDocId), {
-            portDestroyed: true,
+            portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
             activeAd: selectedAdKey,
             ships: updatedShips,
             battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
@@ -1777,7 +1786,7 @@ export default function App() {
         // Synchronize local inspectedPlayer
         setInspectedPlayer((prev: any) => prev ? {
           ...prev,
-          portDestroyed: true,
+          portDestroyed: allDestroyed || prev.portDestroyed,
           activeAd: selectedAdKey,
           ships: updatedShips
         } : prev);
@@ -1785,7 +1794,7 @@ export default function App() {
         // Synchronize realPlayers
         setRealPlayers(prev => prev.map(p => {
           if (p.id === targetDocId || p.userId === targetDocId) {
-            return { ...p, portDestroyed: true, ships: updatedShips };
+            return { ...p, portDestroyed: allDestroyed || p.portDestroyed, ships: updatedShips };
           }
           return p;
         }));
@@ -1793,10 +1802,12 @@ export default function App() {
 
       // Secure Chat Announcement in Firestore
       sendSecureChatMessage(
-        'بث القنبلة الإعلانية 📺',
-        '📢',
-        `📺 هجوم إعلاني ساحق! فجر القبطان @${username} قنبلة إعلانية على محيط القبطان @${inspectedPlayer.username} وبث إعلاناً بعنوان [${adTitle}] لمدة ساعة كاملة!`
+        'رسالة التفجير 📡',
+        '📡',
+        `📡 رسالة التفجير! أطلق القبطان @${username} رسالة التفجير [${adTitle}] على أسطول القبطان @${inspectedPlayer.username} ملحقاً 20,000 ضرر بالسفن!`
       );
+
+      showToast("💥 تم إطلاق رسالة التفجير وإلحاق 20,000 ضرر بالأسطول!", "success");
 
     }, 1800);
   };
@@ -1838,40 +1849,49 @@ export default function App() {
           ? inspectedPlayer.ships
           : getInspectedPlayerShips(inspectedPlayer);
 
-        // Incinerate all ships: 0 HP, docked, destroyed
-        const updatedShips = baseShips.map((s: any) => ({
-          ...s,
-          heart: 0,
-          moving: false,
-          status: 'docked'
-        }));
+        // Apply 70,000 damage to all ships
+        let allDestroyed = false;
+        const updatedShips = baseShips.map((s: any) => {
+          const maxH = s.maxHeart || (typeof s.level === 'number' ? (s.level * 1000) + 10000 : 10000);
+          const currentHeart = typeof s.heart === 'number' ? s.heart : maxH;
+          const newHeart = Math.max(0, currentHeart - 70000);
+          return {
+            ...s,
+            heart: newHeart,
+            ...(newHeart <= 0 ? { moving: false, status: 'docked' } : {})
+          };
+        });
+
+        allDestroyed = updatedShips.length > 0 && updatedShips.every((s: any) => typeof s.heart === 'number' && s.heart <= 0);
 
         const existingReports = Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports : [];
         const newReport = {
           id: `atomic_${Date.now()}`,
           opponent: username,
-          opponentAvatar: avatar || '☢️',
+          opponentAvatar: avatar || '💣',
           type: 'defense',
           result: 'defeat',
           goldChange: 0,
           date: new Date().toISOString(),
-          title: '☢️ كارثة نووية: ميناؤك وسفنك محترقة ومدمرة بالكامل!',
+          title: allDestroyed ? '🚨 كارثة الموت الأسود: تم تدمير أسطولك ومينائك بالكامل!' : '💣 قصف بقنبلة الموت الأسود!',
           log: [
-            `☢️ شن القبطان @${username} هجوماً نووياً شاملاً باستخدام القنبلة الذرية على مينائك!`,
-            `🔥 احترقت جميع سفن أسطولك بالكامل وغرقت في المياه، ودُمرت منشآت الميناء وأرصفته وأصبح ركاماً متفحماً!`,
+            `💣 شن القبطان @${username} هجوماً فتاكاً بقنبلة الموت الأسود على مينائك ملحقاً 70,000 نقطة ضرر بكل سفينة!`,
+            allDestroyed ? `🔥 دُمرت جميع سفن أسطولك بالكامل وغرقت في المياه وأصبح الميناء محترقاً ومدمراً!` : `⚠️ تعرضت سفن الأسطول لأضرار جسيمة للغاية، توجه للصيانة وترميم الهيكل فوراً.`,
             `⚠️ اضغط على زر [إعادة إعمار الميناء وترميم الأسطول] لإصلاح الأضرار واستعادة أسطولك.`
           ]
         };
 
         // Secure collection-based dispatch to /harborEvents
         createHarborEvent(targetDocId, 'ATOMIC_BOMB', {
+          damage: 70000,
+          allDestroyed,
           newReport
         });
 
         // Direct persistent update to target user profile document in Firestore
         if (targetDocId && db) {
           updateDoc(doc(db, 'users', targetDocId), {
-            portDestroyed: true,
+            portDestroyed: allDestroyed || Boolean(inspectedPlayer.portDestroyed),
             ships: updatedShips,
             battleReports: [newReport, ...(Array.isArray(inspectedPlayer.battleReports) ? inspectedPlayer.battleReports.slice(0, 19) : [])],
             updatedAt: new Date().toISOString()
@@ -1883,14 +1903,14 @@ export default function App() {
         // Synchronize local inspectedPlayer
         setInspectedPlayer((prev: any) => prev ? {
           ...prev,
-          portDestroyed: true,
+          portDestroyed: allDestroyed || prev.portDestroyed,
           ships: updatedShips
         } : prev);
 
         // Synchronize realPlayers
         setRealPlayers(prev => prev.map(p => {
           if (p.id === targetDocId || p.userId === targetDocId) {
-            return { ...p, portDestroyed: true, ships: updatedShips };
+            return { ...p, portDestroyed: allDestroyed || p.portDestroyed, ships: updatedShips };
           }
           return p;
         }));
@@ -1898,10 +1918,12 @@ export default function App() {
 
       // Secure Chat Announcement in Firestore
       sendSecureChatMessage(
-        'القوات النووية ☢️',
-        '🚀',
-        `☢️ كارثة نووية! أطلق القبطان مباغتاً @${username} قنبلة ذرية فتاكة على ميناء القبطان @${inspectedPlayer.username} مدخّناً السفن ومخلفاً دماراً شاملاً!`
+        'قنبلة الموت الأسود 💣',
+        '💣',
+        `💣 قنبلة الموت الأسود! أطلق القبطان مباغتاً @${username} قنبلة الموت الأسود الفتاكة على ميناء القبطان @${inspectedPlayer.username} ملحقاً 70,000 ضرر بجميع سفن الأسطول!`
       );
+
+      showToast("💥 تم إطلاق قنبلة الموت الأسود وإلحاق 70,000 ضرر بسفن الخصم!", "success");
 
       // Camera shake lasts 950ms for solid nuclear impact punch
       setTimeout(() => {
@@ -5348,7 +5370,17 @@ export default function App() {
 
     const updatedWeapons = {
       ...weapons,
-      [itemId]: (weapons[itemId] || 0) + 1
+      [itemId]: (weapons[itemId] || 0) + 1,
+      ...(itemId === 'adBomb' ? { emp_bomb: ((weapons.emp_bomb || weapons.adBomb || 0) + 1) } : {}),
+      ...(itemId === 'emp_bomb' ? { adBomb: ((weapons.adBomb || weapons.emp_bomb || 0) + 1) } : {}),
+      ...(itemId === 'atomicBomb' ? { nuke_bomb: ((weapons.nuke_bomb || weapons.atomicBomb || 0) + 1) } : {}),
+      ...(itemId === 'nuke_bomb' ? { atomicBomb: ((weapons.atomicBomb || weapons.nuke_bomb || 0) + 1) } : {}),
+      ...(itemId === 'smallRocket' ? { small_missile: ((weapons.small_missile || weapons.smallRocket || 0) + 1) } : {}),
+      ...(itemId === 'small_missile' ? { smallRocket: ((weapons.smallRocket || weapons.small_missile || 0) + 1) } : {}),
+      ...(itemId === 'mediumRocket' ? { medium_missile: ((weapons.medium_missile || weapons.mediumRocket || 0) + 1) } : {}),
+      ...(itemId === 'medium_missile' ? { mediumRocket: ((weapons.mediumRocket || weapons.medium_missile || 0) + 1) } : {}),
+      ...(itemId === 'largeRocket' ? { large_missile: ((weapons.large_missile || weapons.largeRocket || 0) + 1) } : {}),
+      ...(itemId === 'large_missile' ? { largeRocket: ((weapons.largeRocket || weapons.large_missile || 0) + 1) } : {})
     };
 
     const res = await executeFinancialTransaction({
@@ -14284,109 +14316,49 @@ export default function App() {
 
                 {/* Weapons List Container */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {/* 1. صاروخ صغير */}
+                  {/* 1. رسالة التفجير */}
                   <div 
                     onClick={() => {
-                      if ((weapons.smallRocket || 0) <= 0) {
-                        alert("❌ لا تملك قذائف من هذا السلاح!");
+                      const qty = weapons.adBomb || weapons.emp_bomb || 0;
+                      if (qty <= 0) {
+                        alert("❌ لا تملك هذا السلاح!");
                         return;
                       }
                       setShowWeaponSelector(false);
-                      handleLaunchSmallRocket(selectedVisitedShip);
+                      setShowAdSelectorModal(true);
                     }}
                     style={{
-                      background: 'rgba(24, 24, 27, 0.6)',
-                      border: '1px solid #3f3f46',
+                      background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(0,0,0,0.4) 100%)',
+                      border: '1.5px solid #22c55e',
                       borderRadius: '12px',
                       padding: '12px',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 15px rgba(34,197,94,0.1)'
                     }}
-                    className="hover:bg-zinc-800 hover:border-zinc-500"
+                    className="hover:bg-[rgba(34,197,94,0.2)]"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{weapons.smallRocket !== undefined ? weapons.smallRocket : 320}x</span>
-                      <img src={WEAPON_SMALL_MISSILE_ICON} alt="صاروخ صغير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <span style={{ fontSize: '12px', color: '#4ade80', background: '#14532d', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.adBomb !== undefined ? weapons.adBomb : (weapons.emp_bomb !== undefined ? weapons.emp_bomb : 0))}x</span>
+                      <img src={WEAPON_MEDIA_BOMB_ICON} alt="رسالة التفجير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
                     </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ صغير</div>
-                      <div style={{ fontSize: '12px', color: '#cbd5e1' }}>ضرر 800</div>
+                    <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#4ade80' }}>رسالة التفجير</div>
+                      <div style={{ fontSize: '12px', color: '#86efac', fontWeight: 'bold' }}>ضرر 20,000 💥 (50 💎)</div>
+                      <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.3', marginTop: '2px' }}>
+                        إلحاق 20,000 ضرر بأسطول الخصم مع بث رسالة وتثبيتها
+                      </div>
                     </div>
                   </div>
 
-                  {/* 2. صاروخ متوسط */}
+                  {/* 2. قنبلة الموت الأسود */}
                   <div 
                     onClick={() => {
-                      if ((weapons.mediumRocket || 0) <= 0) {
-                        alert("❌ لا تملك قذائف من هذا السلاح!");
-                        return;
-                      }
-                      setShowWeaponSelector(false);
-                      handleLaunchMediumRocket(selectedVisitedShip);
-                    }}
-                    style={{
-                      background: 'rgba(24, 24, 27, 0.6)',
-                      border: '1px solid #3f3f46',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.2s'
-                    }}
-                    className="hover:bg-zinc-800 hover:border-zinc-500"
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{weapons.mediumRocket !== undefined ? weapons.mediumRocket : 902}x</span>
-                      <img src={WEAPON_MEDIUM_MISSILE_ICON} alt="صاروخ متوسط" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ متوسط</div>
-                      <div style={{ fontSize: '12px', color: '#cbd5e1' }}>ضرر 4,000</div>
-                    </div>
-                  </div>
-
-                  {/* 3. صاروخ كبير */}
-                  <div 
-                    onClick={() => {
-                      if ((weapons.largeRocket || 0) <= 0) {
-                        alert("❌ لا تملك قذائف من هذا السلاح!");
-                        return;
-                      }
-                      setShowWeaponSelector(false);
-                      handleLaunchLargeRocket(selectedVisitedShip);
-                    }}
-                    style={{
-                      background: 'rgba(24, 24, 27, 0.6)',
-                      border: '1px solid #3f3f46',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      transition: 'all 0.2s'
-                    }}
-                    className="hover:bg-zinc-800 hover:border-zinc-500"
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{weapons.largeRocket !== undefined ? weapons.largeRocket : 6435}x</span>
-                      <img src={WEAPON_LARGE_MISSILE_ICON} alt="صاروخ كبير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
-                    </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ كبير</div>
-                      <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 18,000 💥</div>
-                    </div>
-                  </div>
-
-                  {/* 4. قنبلة ذرية */}
-                  <div 
-                    onClick={() => {
-                      if ((weapons.atomicBomb || 0) <= 0) {
+                      const qty = weapons.atomicBomb || weapons.nuke_bomb || 0;
+                      if (qty <= 0) {
                         alert("❌ لا تملك هذا السلاح الفتاك!");
                         return;
                       }
@@ -14408,51 +14380,117 @@ export default function App() {
                     className="hover:bg-[rgba(239,68,68,0.2)]"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#fca5a5', background: '#7f1d1d', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{weapons.atomicBomb !== undefined ? weapons.atomicBomb : 795}x</span>
-                      <img src={WEAPON_ATOMIC_BOMB_ICON} alt="قنبلة ذرية" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <span style={{ fontSize: '12px', color: '#fca5a5', background: '#7f1d1d', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.atomicBomb !== undefined ? weapons.atomicBomb : (weapons.nuke_bomb !== undefined ? weapons.nuke_bomb : 0))}x</span>
+                      <img src={WEAPON_ATOMIC_BOMB_ICON} alt="قنبلة الموت الأسود" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
                     </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fca5a5' }}>قنبلة ذرية</div>
-                      <div style={{ fontSize: '12px', color: '#cbd5e1' }}>ضرر 70,000، وتصيب الكل</div>
+                    <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fca5a5' }}>قنبلة الموت الأسود</div>
+                      <div style={{ fontSize: '12px', color: '#fca5a5', fontWeight: 'bold' }}>ضرر 70,000 💥 (150 💎)</div>
+                      <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.3', marginTop: '2px' }}>
+                        قنبلة فتاكة تلحق 70,000 ضرر بجميع سفن الأسطول
+                      </div>
                     </div>
                   </div>
 
-                  {/* 5. قنبلة إعلانية */}
+                  {/* 3. صاروخ صغير */}
                   <div 
                     onClick={() => {
-                      if ((weapons.adBomb || 0) <= 0) {
-                        alert("❌ لا تملك هذا السلاح الإعلاني!");
+                      const qty = weapons.smallRocket || weapons.small_missile || 0;
+                      if (qty <= 0) {
+                        alert("❌ لا تملك قذائف من هذا السلاح!");
                         return;
                       }
                       setShowWeaponSelector(false);
-                      setShowAdSelectorModal(true);
+                      handleLaunchSmallRocket(selectedVisitedShip);
                     }}
                     style={{
-                      background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(0,0,0,0.4) 100%)',
-                      border: '1.5px solid #22c55e',
+                      background: 'rgba(24, 24, 27, 0.6)',
+                      border: '1px solid #3f3f46',
                       borderRadius: '12px',
                       padding: '12px',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      transition: 'all 0.2s',
-                      boxShadow: '0 4px 15px rgba(34,197,94,0.1)'
+                      transition: 'all 0.2s'
                     }}
-                    className="hover:bg-[rgba(34,197,94,0.2)]"
+                    className="hover:bg-zinc-800 hover:border-zinc-500"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#4ade80', background: '#14532d', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{weapons.adBomb !== undefined ? weapons.adBomb : 101}x</span>
-                      <img src={WEAPON_MEDIA_BOMB_ICON} alt="قنبلة إعلامية" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.smallRocket !== undefined ? weapons.smallRocket : (weapons.small_missile !== undefined ? weapons.small_missile : 0))}x</span>
+                      <img src={WEAPON_SMALL_MISSILE_ICON} alt="صاروخ صغير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
                     </div>
                     <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#4ade80' }}>قنبلة إعلانية</div>
-                      <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.4' }}>
-                        تدمير جميع سفن الخصم فوراً + إعلان ساعة على محيطه.
-                      </div>
-                      <div style={{ display: 'inline-block', fontSize: '10px', background: '#ca8a04', color: '#000', padding: '1px 6px', borderRadius: '4px', fontWeight: 'bold', marginTop: '4px' }}>
-                        500 خبرة ⭐
-                      </div>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ صغير</div>
+                      <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 1,000 ⚔️ (100,000 🪙)</div>
+                    </div>
+                  </div>
+
+                  {/* 4. صاروخ المتوسط */}
+                  <div 
+                    onClick={() => {
+                      const qty = weapons.mediumRocket || weapons.medium_missile || 0;
+                      if (qty <= 0) {
+                        alert("❌ لا تملك قذائف من هذا السلاح!");
+                        return;
+                      }
+                      setShowWeaponSelector(false);
+                      handleLaunchMediumRocket(selectedVisitedShip);
+                    }}
+                    style={{
+                      background: 'rgba(24, 24, 27, 0.6)',
+                      border: '1px solid #3f3f46',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                    className="hover:bg-zinc-800 hover:border-zinc-500"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.mediumRocket !== undefined ? weapons.mediumRocket : (weapons.medium_missile !== undefined ? weapons.medium_missile : 0))}x</span>
+                      <img src={WEAPON_MEDIUM_MISSILE_ICON} alt="صاروخ المتوسط" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                    </div>
+                    <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ المتوسط</div>
+                      <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 5,000 ⚔️ (200,000 🪙)</div>
+                    </div>
+                  </div>
+
+                  {/* 5. صاروخ كبير */}
+                  <div 
+                    onClick={() => {
+                      const qty = weapons.largeRocket || weapons.large_missile || 0;
+                      if (qty <= 0) {
+                        alert("❌ لا تملك قذائف من هذا السلاح!");
+                        return;
+                      }
+                      setShowWeaponSelector(false);
+                      handleLaunchLargeRocket(selectedVisitedShip);
+                    }}
+                    style={{
+                      background: 'rgba(24, 24, 27, 0.6)',
+                      border: '1px solid #3f3f46',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                    className="hover:bg-zinc-800 hover:border-zinc-500"
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.largeRocket !== undefined ? weapons.largeRocket : (weapons.large_missile !== undefined ? weapons.large_missile : 0))}x</span>
+                      <img src={WEAPON_LARGE_MISSILE_ICON} alt="صاروخ كبير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                    </div>
+                    <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ كبير</div>
+                      <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 100,000 💥 (300,000 🪙)</div>
                     </div>
                   </div>
 
