@@ -22,6 +22,8 @@
         "weapons": { "type": "object" },
         "fishInventory": { "type": "object" },
         "crewServices": { "type": "object" },
+        "crewInventory": { "type": "object" },
+        "shieldInventory": { "type": "object" },
         "tribeId": { "type": "string" },
         "tribeName": { "type": "string" },
         "friends": { "type": "array" },

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { ShipState, ChatMessage, Tribe, CrewMember, Quest, BattleReport, GlobalNotification, NotificationEventType } from './types';
-import { SHOP_SHIPS, FISH_REWARD_DATA, getHarborImageUrl, FISH_HOUSE_LEVELS, getFishHouseImageUrl, getFishHouseCapacity, getShipCapacity, GOLD_COIN_ICON, GEM_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_LARGE_MISSILE_ICON, WEAPON_MEDIA_BOMB_ICON, WEAPON_ATOMIC_BOMB_ICON, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS, WEAPONS_DATA } from './data';
+import { SHOP_SHIPS, FISH_REWARD_DATA, getHarborImageUrl, FISH_HOUSE_LEVELS, getFishHouseImageUrl, getFishHouseCapacity, getShipCapacity, GOLD_COIN_ICON, GEM_ICON, WAREHOUSE_BG, WEAPON_SMALL_MISSILE_ICON, WEAPON_SMALL_MISSILE_BG, WEAPON_MEDIUM_MISSILE_ICON, WEAPON_MEDIUM_MISSILE_BG, WEAPON_LARGE_MISSILE_ICON, WEAPON_LARGE_MISSILE_BG, WEAPON_MEDIA_BOMB_ICON, WEAPON_MEDIA_BOMB_BG, WEAPON_ATOMIC_BOMB_ICON, WEAPON_ATOMIC_BOMB_BG, SHIP_GUARDIAN_ICON, SHIP_GUARDIAN_BG, FIXER_SMALL_ICON, FIXER_SMALL_BG, FIXER_MEDIUM_ICON, FIXER_MEDIUM_BG, FIXER_LARGE_ICON, FIXER_LARGE_BG, FIXER_LEGENDARY_ICON, FIXER_LEGENDARY_BG, SAILOR_ICON, SAILOR_BG, GOLDEN_HUNTER_ICON, GOLDEN_HUNTER_BG, MARKET_EXPERT_ICON, MARKET_EXPERT_BG, LUCK_PIRATE_ICON, LUCK_PIRATE_BG, SHIP_PILOT_ICON, SHIP_PILOT_BG, SHIP_THIEF_ICON, SHIP_THIEF_BG, CREW_SHOP_ITEMS, WEAPONS_DATA } from './data';
 import FishHouseComponent from './components/FishHouseComponent';
 import GoogleAccountSelector from './components/GoogleAccountSelector';
 import LandingScreen from './components/LandingScreen';
@@ -31,6 +31,7 @@ import {
 
 import ShipImage from './components/ShipImage';
 import ShipCrewMember, { CREW_VISUAL_MAP, sanitizeShipCrew } from './components/ShipCrewMember';
+import { SettingsView } from './components/SettingsView';
 // @ts-ignore
 import destroyedPortImg from './assets/images/destroyed_port_1784900250438.jpg';
 
@@ -292,6 +293,8 @@ export default function App() {
         if (data.fishInventory) setFishInventory(data.fishInventory);
         if (data.weapons) setWeapons(data.weapons);
         if (data.crewServices) setCrewServices(data.crewServices);
+        if (data.crewInventory) setCrewInventory(data.crewInventory);
+        if (data.shieldInventory) setShieldInventory(data.shieldInventory);
         if (Array.isArray(data.friends)) setFriends(data.friends);
         if (Array.isArray(data.friendRequests)) setFriendRequests(data.friendRequests);
         if (data.tribeId) setTribeId(data.tribeId);
@@ -646,6 +649,47 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('pirate_crew_services', JSON.stringify(crewServices));
   }, [crewServices]);
+
+  // --- Crew Inventory State (المخزن - أفراد الطاقم والشخصيات) ---
+  const [crewInventory, setCrewInventory] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('pirate_crew_inventory');
+    return saved ? JSON.parse(saved) : {
+      guide: 1,
+      luck: 1,
+      sailor: 0,
+      thief: 1,
+      cop: 1,
+      merchant: 0,
+      fixer_sm: 5,
+      fixer_md: 3,
+      fixer_lg: 1,
+      fixer_epic: 0,
+      market_expert: 1,
+      gold_fisher: 1,
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pirate_crew_inventory', JSON.stringify(crewInventory));
+  }, [crewInventory]);
+
+  // --- Shield Inventory State (المخزن - دروع الحماية) ---
+  const [shieldInventory, setShieldInventory] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('pirate_shield_inventory');
+    return saved ? JSON.parse(saved) : {
+      shield_4h: 1,
+      shield_1d: 0,
+      shield_2d: 0,
+      anti_nuke: 0,
+      anti_emp: 0,
+      disable_anti_range: 0,
+      disable_anti_core: 0,
+    };
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pirate_shield_inventory', JSON.stringify(shieldInventory));
+  }, [shieldInventory]);
 
   useEffect(() => {
     localStorage.setItem('pirate_bg_theme', bgTheme);
@@ -1225,8 +1269,66 @@ export default function App() {
     }
   };
 
+  // --- Attack & Steal Validation Function (دالة التحقق من شروط الهجوم والسرقة) ---
+  const getShipEffectiveLevel = (s: any): number => {
+    if (!s) return 0;
+    if (typeof s.level === 'number') return s.level;
+    const spec = SHOP_SHIPS.find((shopShip: any) => shopShip.name === s.name);
+    return spec?.level ?? 0;
+  };
+
+  /**
+   * التحقق من شروط الهجوم والسرقة:
+   * 1. السماح بعمليات الهجوم والسرقة (التفجير) فقط إذا كانت سفن اللاعب بمستوى 6 وما فوق.
+   * 2. التحقق برمجياً من أن مستوى السفينة/السفن يبلغ 6 أو أعلى قبل تنفيذ أي هجوم أو سرقة.
+   * 3. إذا حاول اللاعب الهجوم وسفنه أقل من مستوى 6، يتم إظهار رسالة تنبيه تمنعه من ذلك.
+   */
+  const validateAttackOrSteal = (specificShipId?: string): { allowed: boolean; message: string } => {
+    const activeShips = ships.filter(s => s.exists);
+    if (activeShips.length === 0) {
+      return {
+        allowed: false,
+        message: 'يجب أن تمتلك سفينة نشطة واحدة على الأقل لتتمكن من الهجوم أو السرقة!'
+      };
+    }
+
+    // إذا تم تحديد سفينة معينة لتنفيذ الهجوم/السرقة (مثل اختيار سفينة في شاشة السرقة)
+    if (specificShipId) {
+      const chosenShip = activeShips.find(s => s.id === specificShipId);
+      if (chosenShip) {
+        const lvl = getShipEffectiveLevel(chosenShip);
+        if (lvl < 6) {
+          return {
+            allowed: false,
+            message: 'يجب أن تكون سفنك بمستوى 6 وما فوق لتتمكن من الهجوم أو السرقة'
+          };
+        }
+        return { allowed: true, message: '' };
+      }
+    }
+
+    // التحقق من أن مستوى سفن اللاعب يبلغ 6 وما فوق
+    const maxLevel = Math.max(...activeShips.map(s => getShipEffectiveLevel(s)), 0);
+    if (maxLevel < 6) {
+      return {
+        allowed: false,
+        message: 'يجب أن تكون سفنك بمستوى 6 وما فوق لتتمكن من الهجوم أو السرقة'
+      };
+    }
+
+    return { allowed: true, message: '' };
+  };
+
   const handleLaunchSmallRocket = (targetShipOverride?: any) => {
     if (!inspectedPlayer) return;
+
+    // التحقق من شرط مستوى السفن (مستوى 6 وما فوق)
+    const validation = validateAttackOrSteal();
+    if (!validation.allowed) {
+      alert(validation.message);
+      showToast(validation.message, 'error');
+      return;
+    }
     
     // Ensure all menus are closed so the battlefield is completely unobstructed
     setSelectedVisitedShip(null);
@@ -1366,6 +1468,14 @@ export default function App() {
 
   const handleLaunchMediumRocket = (targetShipOverride?: any) => {
     if (!inspectedPlayer) return;
+
+    // التحقق من شرط مستوى السفن (مستوى 6 وما فوق)
+    const validation = validateAttackOrSteal();
+    if (!validation.allowed) {
+      alert(validation.message);
+      showToast(validation.message, 'error');
+      return;
+    }
     
     // Ensure all menus are closed so the battlefield is completely unobstructed
     setSelectedVisitedShip(null);
@@ -1505,6 +1615,14 @@ export default function App() {
 
   const handleLaunchLargeRocket = (targetShipOverride?: any) => {
     if (!inspectedPlayer) return;
+
+    // التحقق من شرط مستوى السفن (مستوى 6 وما فوق)
+    const validation = validateAttackOrSteal();
+    if (!validation.allowed) {
+      alert(validation.message);
+      showToast(validation.message, 'error');
+      return;
+    }
     
     // Ensure all menus are closed immediately so nothing obstructs rocket trajectory or explosion
     setSelectedVisitedShip(null);
@@ -1685,6 +1803,14 @@ export default function App() {
   const handleLaunchAdBomb = async (selectedAdKey: string) => {
     if (!inspectedPlayer) return;
 
+    // التحقق من شرط مستوى السفن (مستوى 6 وما فوق)
+    const validation = validateAttackOrSteal();
+    if (!validation.allowed) {
+      alert(validation.message);
+      showToast(validation.message, 'error');
+      return;
+    }
+
     // Ensure all menus are closed immediately
     setSelectedVisitedShip(null);
     setShowWeaponSelector(false);
@@ -1715,7 +1841,7 @@ export default function App() {
     // Get Ad Title Arabic
     let adTitle = '';
     if (selectedAdKey === 'luffy_king') adTitle = '☠️ لوفي ملك القراصنة';
-    else if (selectedAdKey === 'jack_sabro') adTitle = '🦎 جاك سابرو';
+    else if (selectedAdKey === 'jack_sabro' || selectedAdKey === 'deep_dragon') adTitle = '🦎 تنين الأعماق';
     else if (selectedAdKey === 'luffy_grandeur') adTitle = '🔥 فخامة لوفي';
     else if (selectedAdKey === 'anf') adTitle = '👑 وإذا سطا خاف الأنام';
 
@@ -1814,6 +1940,14 @@ export default function App() {
 
   const handleLaunchAtomicBomb = async () => {
     if (!inspectedPlayer) return;
+
+    // التحقق من شرط مستوى السفن (مستوى 6 وما فوق)
+    const validation = validateAttackOrSteal();
+    if (!validation.allowed) {
+      alert(validation.message);
+      showToast(validation.message, 'error');
+      return;
+    }
     
     // Ensure all menus are closed immediately so nothing obstructs falling bomb or nuclear explosion
     setSelectedVisitedShip(null);
@@ -3004,6 +3138,8 @@ export default function App() {
             if (data.fishInventory) setFishInventory(data.fishInventory);
             if (data.weapons) setWeapons(data.weapons);
             if (data.crewServices) setCrewServices(data.crewServices);
+            if (data.crewInventory) setCrewInventory(data.crewInventory);
+            if (data.shieldInventory) setShieldInventory(data.shieldInventory);
             if (Array.isArray(data.friends)) setFriends(data.friends);
             if (Array.isArray(data.friendRequests)) setFriendRequests(data.friendRequests);
             if (data.tribeId) setTribeId(data.tribeId);
@@ -3039,6 +3175,29 @@ export default function App() {
               fishInventory: DEFAULT_FISH_INVENTORY,
               weapons: DEFAULT_WEAPONS,
               crewServices: DEFAULT_CREW_SERVICES,
+              crewInventory: {
+                guide: 1,
+                luck: 1,
+                sailor: 0,
+                thief: 1,
+                cop: 1,
+                merchant: 0,
+                fixer_sm: 5,
+                fixer_md: 3,
+                fixer_lg: 1,
+                fixer_epic: 0,
+                market_expert: 1,
+                gold_fisher: 1,
+              },
+              shieldInventory: {
+                shield_4h: 1,
+                shield_1d: 0,
+                shield_2d: 0,
+                anti_nuke: 0,
+                anti_emp: 0,
+                disable_anti_range: 0,
+                disable_anti_core: 0,
+              },
               friends: [],
               friendRequests: [],
               tribeId: '',
@@ -3065,6 +3224,8 @@ export default function App() {
             setFishInventory(initialData.fishInventory);
             setWeapons(initialData.weapons);
             setCrewServices(initialData.crewServices);
+            setCrewInventory(initialData.crewInventory);
+            setShieldInventory(initialData.shieldInventory);
             setFriends([]);
             setFriendRequests([]);
             setTribeId('');
@@ -3132,6 +3293,8 @@ export default function App() {
               if (data.fishInventory) setFishInventory(data.fishInventory);
               if (data.weapons) setWeapons(data.weapons);
               if (data.crewServices) setCrewServices(data.crewServices);
+              if (data.crewInventory) setCrewInventory(data.crewInventory);
+              if (data.shieldInventory) setShieldInventory(data.shieldInventory);
               if (Array.isArray(data.friends)) setFriends(data.friends);
               if (Array.isArray(data.friendRequests)) setFriendRequests(data.friendRequests);
               if (data.tribeId) setTribeId(data.tribeId);
@@ -3192,7 +3355,7 @@ export default function App() {
       const currentData = {
         username, email: cleanUserEmail, avatar, server, pirateClass, gold, gems, exp, redGems,
         fishStorageLevel, shipTowerLevel, ships, crew, quests, battleReports,
-        fishInventory, weapons, crewServices, portDestroyed, friends, friendRequests, tribeId, tribeName,
+        fishInventory, weapons, crewServices, crewInventory, shieldInventory, portDestroyed, friends, friendRequests, tribeId, tribeName,
         updatedAt: new Date().toISOString()
       };
       const userDocRef = doc(db, 'users', user.uid);
@@ -3203,7 +3366,7 @@ export default function App() {
   }, [
     username, avatar, server, pirateClass, gold, gems, exp, redGems,
     fishStorageLevel, shipTowerLevel, ships, crew, quests, battleReports,
-    fishInventory, weapons, crewServices, portDestroyed
+    fishInventory, weapons, crewServices, crewInventory, shieldInventory, portDestroyed
   ]);
 
   // --- Active Session Continuous Validation (Interval + Tab Focus + Event) ---
@@ -3375,6 +3538,8 @@ export default function App() {
         if (data.fishInventory) setFishInventory(data.fishInventory);
         if (data.weapons) setWeapons(data.weapons);
         if (data.crewServices) setCrewServices(data.crewServices);
+        if (data.crewInventory) setCrewInventory(data.crewInventory);
+        if (data.shieldInventory) setShieldInventory(data.shieldInventory);
         if (Array.isArray(data.friends)) setFriends(data.friends);
         if (Array.isArray(data.friendRequests)) setFriendRequests(data.friendRequests);
         if (data.tribeId) setTribeId(data.tribeId);
@@ -4253,9 +4418,9 @@ export default function App() {
     const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
 
     // Calculate sail-out duration: normally 1.8s (1800ms)
-    // When auto-fishing is active, accelerate the trip smoothly (tuned 40% lower speed)
-    let sailOutDuration = isAutoActive ? (isEngineUpgraded ? 520 : 780) : (isEngineUpgraded ? 900 : 1800);
-    sailOutDuration = Math.max(285, Math.floor(sailOutDuration / speedMultiplier));
+    // When auto-fishing is active, sail smoothly with balanced speed (reduced by 60%)
+    let sailOutDuration = isAutoActive ? (isEngineUpgraded ? 1300 : 1950) : (isEngineUpgraded ? 900 : 1800);
+    sailOutDuration = Math.max(700, Math.floor(sailOutDuration / speedMultiplier));
     if (isSailorActive) {
       sailOutDuration = Math.floor(sailOutDuration * 0.5);
     }
@@ -4306,7 +4471,7 @@ export default function App() {
     const shipCrew = selectedShip.assignedCrew || [];
     const isAutoActive = isAuto || (!selectedShip.autoFishingPaused && (shipCrew.includes('golden_hunter') || shipCrew.includes('gold_fisher')));
 
-    const flipDuration = isAutoActive ? 220 : 500;
+    const flipDuration = isAutoActive ? 550 : 500;
 
     // Start the return action: Flip direction facing left
     setShips(prev =>
@@ -4324,10 +4489,10 @@ export default function App() {
       })
     );
 
-    let returnTripDuration = isAutoActive ? (isEngineUpgraded ? 520 : 780) : (isEngineUpgraded ? 800 : 1800);
+    let returnTripDuration = isAutoActive ? (isEngineUpgraded ? 1300 : 1950) : (isEngineUpgraded ? 800 : 1800);
     const speedLvl = selectedShip.speedLevel || 1;
     const speedMultiplier = 1 + (speedLvl - 1) * 0.08;
-    returnTripDuration = Math.max(285, Math.floor(returnTripDuration / speedMultiplier));
+    returnTripDuration = Math.max(700, Math.floor(returnTripDuration / speedMultiplier));
 
     const isSailorActive = shipCrew.includes('sailor') || shipCrew.includes('sailors');
     const isLuckActive = shipCrew.includes('luck');
@@ -4370,7 +4535,7 @@ export default function App() {
           window.dispatchEvent(new CustomEvent('spawn-pirate-particles', {
             detail: { x: sx, y: sy, type: 'gold-gain', count: 12 }
           }));
-        }, isAutoActive ? 280 : 300);
+        }, isAutoActive ? 700 : 300);
 
         setShips(prev =>
           prev.map(s => {
@@ -4381,7 +4546,7 @@ export default function App() {
                 status: 'docked',
                 moving: false,
                 lastMoveTime: 0,
-                transitionDuration: isAutoActive ? '0.7s' : '1.8s'
+                transitionDuration: isAutoActive ? '1.75s' : '1.8s'
               };
             }
             return s;
@@ -4447,8 +4612,8 @@ export default function App() {
 
     if (autoShips.length === 0) return;
 
-    // High-speed auto-fishing takes ~2.0 seconds per complete trip (sail out, collect, return - tuned 40% lower speed)
-    const cyclesPerShip = Math.floor(cappedSeconds / 2.0);
+    // Auto-fishing takes ~6.2 seconds per complete synchronized trip (sail out, collect, return, dock - reduced speed by 60%)
+    const cyclesPerShip = Math.floor(cappedSeconds / 6.2);
     if (cyclesPerShip <= 0) return;
 
     let totalGainedGold = 0;
@@ -4575,10 +4740,10 @@ export default function App() {
   // const globalProgress = (currentTime - startTimestamp) / totalDuration;
   // وتتطابق نسبة تقدم كل سفينة تماماً مع القيمة العامة لضمان التزامن الكامل بين جميع السفن.
 
-  const FLEET_SAIL_OUT_MS = 780;
-  const FLEET_FLIP_MS = 220;
-  const FLEET_RETURN_MS = 780;
-  const FLEET_DOCK_PAUSE_MS = 700;
+  const FLEET_SAIL_OUT_MS = 1950;
+  const FLEET_FLIP_MS = 550;
+  const FLEET_RETURN_MS = 1950;
+  const FLEET_DOCK_PAUSE_MS = 1750;
 
   const shipsRef = useRef(ships);
   useEffect(() => {
@@ -5354,56 +5519,261 @@ export default function App() {
     }
   };
 
-  const buyWeaponItem = async (itemId: string, costType: 'gold' | 'blueGems', costValue: number) => {
+  /**
+   * دالة الشراء المركزية والمعاملة الذرية الموحدة (Unified Atomic Purchase Engine)
+   * تضمن:
+   * 1. التحقق من الرصيد والاتصال بالإنترنت قبل أي إجراء.
+   * 2. إضافة العنصر المشتري فوراً إلى المخزن المناسب (الأسلحة، أفراد الطاقم، الدروع).
+   * 3. مزامنة فورية بين المتجر والمخزن (React state + Firestore + localStorage).
+   * 4. الحفاظ الصارم على الرصيد وعدم خصم أي ذهب أو جواهر إذا تعثرت العملية.
+   */
+  const handlePurchase = async (params: {
+    category: 'weapon' | 'crew' | 'shield' | 'ship' | 'service' | 'item';
+    itemId: string;
+    itemName: string;
+    costType: 'gold' | 'gems' | 'blueGems';
+    price: number;
+    quantity?: number;
+    targetShipId?: string;
+  }): Promise<boolean> => {
+    const { category, itemId, itemName, costType, price, quantity = 1, targetShipId } = params;
+
     if (!isNetworkOnline()) {
-      notifyOfflineBlocked('شراء عناصر الترسانة الحربية');
-      return;
-    }
-    if (costType === 'gold' && gold < costValue) {
-      alert('الذهب غير كافٍ لشراء هذا الصنف!');
-      return;
-    }
-    if (costType === 'blueGems' && gems < costValue) {
-      alert('الجواهر غير كافية لشراء هذا الصنف!');
-      return;
+      notifyOfflineBlocked(`شراء [${itemName}]`);
+      return false;
     }
 
-    const updatedWeapons = {
-      ...weapons,
-      [itemId]: (weapons[itemId] || 0) + 1,
-      ...(itemId === 'adBomb' ? { emp_bomb: ((weapons.emp_bomb || weapons.adBomb || 0) + 1) } : {}),
-      ...(itemId === 'emp_bomb' ? { adBomb: ((weapons.adBomb || weapons.emp_bomb || 0) + 1) } : {}),
-      ...(itemId === 'atomicBomb' ? { nuke_bomb: ((weapons.nuke_bomb || weapons.atomicBomb || 0) + 1) } : {}),
-      ...(itemId === 'nuke_bomb' ? { atomicBomb: ((weapons.atomicBomb || weapons.nuke_bomb || 0) + 1) } : {}),
-      ...(itemId === 'smallRocket' ? { small_missile: ((weapons.small_missile || weapons.smallRocket || 0) + 1) } : {}),
-      ...(itemId === 'small_missile' ? { smallRocket: ((weapons.smallRocket || weapons.small_missile || 0) + 1) } : {}),
-      ...(itemId === 'mediumRocket' ? { medium_missile: ((weapons.medium_missile || weapons.mediumRocket || 0) + 1) } : {}),
-      ...(itemId === 'medium_missile' ? { mediumRocket: ((weapons.mediumRocket || weapons.medium_missile || 0) + 1) } : {}),
-      ...(itemId === 'largeRocket' ? { large_missile: ((weapons.large_missile || weapons.largeRocket || 0) + 1) } : {}),
-      ...(itemId === 'large_missile' ? { largeRocket: ((weapons.largeRocket || weapons.large_missile || 0) + 1) } : {})
-    };
+    const isGold = costType === 'gold';
+    if (isGold && gold < price) {
+      alert(`❌ الذهب غير كافٍ لإتمام عملية الشراء!\nتحتاج إلى: ${price.toLocaleString('ar-EG')} 🪙 ذهب.\nرصيدك المتوفر: ${gold.toLocaleString('ar-EG')} 🪙 ذهب.`);
+      return false;
+    }
+    if (!isGold && gems < price) {
+      alert(`❌ الجواهر غير كافية لإتمام عملية الشراء!\nتحتاج إلى: ${price.toLocaleString('ar-EG')} 💎 جوهرة.\nرصيدك المتوفر: ${gems.toLocaleString('ar-EG')} 💎 جوهرة.`);
+      return false;
+    }
 
+    // 1. حساب حالات المخازن المحدثة
+    let updatedWeapons = { ...weapons };
+    let updatedCrewInventory = { ...crewInventory };
+    let updatedShieldInventory = { ...shieldInventory };
+    let updatedCrewServices = { ...crewServices };
+    let updatedShips = [...ships];
+
+    const normKey = itemId === 'police' ? 'cop' 
+      : itemId === 'sailors' ? 'sailor' 
+      : itemId === 'gold_fisher' ? 'golden_hunter' 
+      : (itemId === 'repairer_small' || itemId === 'smallRepair') ? 'fixer_sm'
+      : (itemId === 'repairer_medium' || itemId === 'mediumRepair') ? 'fixer_md'
+      : (itemId === 'repairer_large' || itemId === 'largeRepair') ? 'fixer_lg'
+      : (itemId === 'repairer_legendary' || itemId === 'legendaryRepair') ? 'fixer_epic'
+      : itemId;
+
+    // A) عناصر الأسلحة والترسانة الحربية
+    if (category === 'weapon' || WEAPONS_DATA.some(w => w.key === itemId || w.id === itemId)) {
+      const curQty = weapons[itemId] || 0;
+      const newQty = curQty + quantity;
+      updatedWeapons[itemId] = newQty;
+
+      if (itemId === 'adBomb' || itemId === 'emp_bomb') {
+        const dualQty = (weapons.emp_bomb || weapons.adBomb || 0) + quantity;
+        updatedWeapons.adBomb = dualQty;
+        updatedWeapons.emp_bomb = dualQty;
+      } else if (itemId === 'atomicBomb' || itemId === 'nuke_bomb') {
+        const dualQty = (weapons.nuke_bomb || weapons.atomicBomb || 0) + quantity;
+        updatedWeapons.atomicBomb = dualQty;
+        updatedWeapons.nuke_bomb = dualQty;
+      } else if (itemId === 'smallRocket' || itemId === 'small_missile') {
+        const dualQty = (weapons.small_missile || weapons.smallRocket || 0) + quantity;
+        updatedWeapons.smallRocket = dualQty;
+        updatedWeapons.small_missile = dualQty;
+      } else if (itemId === 'mediumRocket' || itemId === 'medium_missile') {
+        const dualQty = (weapons.medium_missile || weapons.mediumRocket || 0) + quantity;
+        updatedWeapons.mediumRocket = dualQty;
+        updatedWeapons.medium_missile = dualQty;
+      } else if (itemId === 'largeRocket' || itemId === 'large_missile') {
+        const dualQty = (weapons.large_missile || weapons.largeRocket || 0) + quantity;
+        updatedWeapons.largeRocket = dualQty;
+        updatedWeapons.large_missile = dualQty;
+      }
+    }
+
+    // B) عناصر الطاقم والشخصيات وحزم الصيانة
+    if (category === 'crew' || CREW_SHOP_ITEMS.some(c => c.id === itemId || c.id === normKey)) {
+      const curCrewQty = crewInventory[itemId] || crewInventory[normKey] || 0;
+      const newCrewQty = curCrewQty + quantity;
+      updatedCrewInventory[itemId] = newCrewQty;
+      updatedCrewInventory[normKey] = newCrewQty;
+
+      if (normKey === 'golden_hunter' || normKey === 'gold_fisher') {
+        updatedCrewInventory.golden_hunter = newCrewQty;
+        updatedCrewInventory.gold_fisher = newCrewQty;
+        updatedCrewServices.golden_hunter = true;
+        updatedCrewServices.gold_fisher = true;
+      } else if (normKey === 'cop' || normKey === 'police') {
+        updatedCrewInventory.cop = newCrewQty;
+        updatedCrewInventory.police = newCrewQty;
+        updatedCrewServices.cop = true;
+        updatedCrewServices.police = true;
+      } else if (normKey === 'sailor' || normKey === 'sailors') {
+        updatedCrewInventory.sailor = newCrewQty;
+        updatedCrewInventory.sailors = newCrewQty;
+        updatedCrewServices.sailor = true;
+        updatedCrewServices.sailors = true;
+      } else if (normKey === 'thief') {
+        updatedCrewInventory.thief = newCrewQty;
+        updatedCrewServices.thief = true;
+      } else if (normKey === 'guide') {
+        updatedCrewInventory.guide = newCrewQty;
+        updatedCrewServices.guide = true;
+      } else if (normKey === 'luck') {
+        updatedCrewInventory.luck = newCrewQty;
+        updatedCrewServices.luck = true;
+      } else if (normKey === 'market_expert') {
+        updatedCrewInventory.market_expert = newCrewQty;
+        updatedCrewServices.market_expert = true;
+      }
+
+      // مزامنة حزم الصيانة في كافة الجداول
+      if (itemId === 'fixer_sm' || itemId === 'smallRepair' || itemId === 'repairer_small') {
+        const smQty = (crewInventory.fixer_sm || 0) + quantity;
+        updatedCrewInventory.fixer_sm = smQty;
+        updatedCrewServices.repairer_small = (crewServices.repairer_small || 0) + quantity;
+        updatedCrewServices.fixer_sm = true;
+        updatedWeapons.smallRepair = (weapons.smallRepair || 0) + quantity;
+      } else if (itemId === 'fixer_md' || itemId === 'mediumRepair' || itemId === 'repairer_medium') {
+        const mdQty = (crewInventory.fixer_md || 0) + quantity;
+        updatedCrewInventory.fixer_md = mdQty;
+        updatedCrewServices.repairer_medium = (crewServices.repairer_medium || 0) + quantity;
+        updatedCrewServices.fixer_md = true;
+        updatedWeapons.mediumRepair = (weapons.mediumRepair || 0) + quantity;
+      } else if (itemId === 'fixer_lg' || itemId === 'largeRepair' || itemId === 'repairer_large') {
+        const lgQty = (crewInventory.fixer_lg || 0) + quantity;
+        updatedCrewInventory.fixer_lg = lgQty;
+        updatedCrewServices.repairer_large = (crewServices.repairer_large || 0) + quantity;
+        updatedCrewServices.fixer_lg = true;
+        updatedWeapons.largeRepair = (weapons.largeRepair || 0) + quantity;
+      } else if (itemId === 'fixer_epic' || itemId === 'legendaryRepair' || itemId === 'repairer_legendary') {
+        const epQty = (crewInventory.fixer_epic || 0) + quantity;
+        updatedCrewInventory.fixer_epic = epQty;
+        updatedCrewServices.repairer_legendary = (crewServices.repairer_legendary || 0) + quantity;
+        updatedCrewServices.fixer_epic = true;
+        updatedWeapons.legendaryRepair = (weapons.legendaryRepair || 0) + quantity;
+      }
+
+      // تعيين الطاقم والمصلحين على السفينة إن لم يكن معيناً
+      const assignedShipId = targetShipId || currentShipId || (ships.find(s => s.exists)?.id || 's1');
+      if (normKey === 'golden_hunter') {
+        updatedShips = ships.map(s => {
+          if (s.exists) {
+            const currentCrew = s.assignedCrew || [];
+            const newCrew = currentCrew.includes('golden_hunter') ? currentCrew : [...currentCrew, 'golden_hunter'];
+            return {
+              ...s,
+              assignedCrew: newCrew,
+              crewPower: (s.crewPower || 0) + (currentCrew.includes('golden_hunter') ? 0 : 15),
+              autoFishingPaused: false
+            };
+          }
+          return s;
+        });
+      } else {
+        updatedShips = ships.map(s => {
+          if (s.id === assignedShipId) {
+            const currentCrew = s.assignedCrew || [];
+            const newCrew = currentCrew.includes(normKey) ? currentCrew : [...currentCrew, normKey];
+            let newHeart = s.heart;
+            const maxHp = s.maxHeart || 1000;
+            if (normKey === 'fixer_sm') {
+              newHeart = Math.min(maxHp, (s.heart ?? maxHp) + 500);
+            } else if (normKey === 'fixer_md') {
+              const heal = Math.max(1000, Math.floor(maxHp * 0.5));
+              newHeart = Math.min(maxHp, (s.heart ?? maxHp) + heal);
+            } else if (normKey === 'fixer_lg' || normKey === 'fixer_epic') {
+              newHeart = maxHp;
+            }
+            return {
+              ...s,
+              heart: typeof newHeart === 'number' ? newHeart : s.heart,
+              assignedCrew: newCrew,
+              crewPower: (s.crewPower || 0) + (currentCrew.includes(normKey) ? 0 : 15)
+            };
+          }
+          if (normKey === 'fixer_epic' && s.exists) {
+            return {
+              ...s,
+              heart: s.maxHeart || 1000
+            };
+          }
+          return s;
+        });
+      }
+    }
+
+    // C) عناصر الدروع
+    if (category === 'shield' || itemId.startsWith('shield_')) {
+      const curShieldQty = shieldInventory[itemId] || 0;
+      updatedShieldInventory[itemId] = curShieldQty + quantity;
+    }
+
+    // 2. تنفيذ المعاملة المالية الذرية في Firestore وقاعدة البيانات
     const res = await executeFinancialTransaction({
-      goldDelta: costType === 'gold' ? -costValue : 0,
-      gemsDelta: costType === 'blueGems' ? -costValue : 0,
+      goldDelta: isGold ? -price : 0,
+      gemsDelta: !isGold ? -price : 0,
       weapons: updatedWeapons,
-      reason: `شراء سلاح (${itemId})`,
+      crewInventory: updatedCrewInventory,
+      shieldInventory: updatedShieldInventory,
+      crewServices: updatedCrewServices,
+      ships: updatedShips,
+      reason: `شراء [${itemName}] وإضافته للمخزن`,
       onLocalApply: () => {
-        if (costType === 'gold') {
-          setGold(prev => prev - costValue);
-        } else {
-          setGems(prev => prev - costValue);
-        }
+        if (isGold) setGold(prev => Math.max(0, prev - price));
+        else setGems(prev => Math.max(0, prev - price));
         setWeapons(updatedWeapons);
+        setCrewInventory(updatedCrewInventory);
+        setShieldInventory(updatedShieldInventory);
+        setCrewServices(updatedCrewServices);
+        setShips(updatedShips);
       }
     });
 
-    if (res.success) {
-      if (typeof res.newGold === 'number') setGold(res.newGold);
-      if (typeof res.newGems === 'number') setGems(res.newGems);
-      setWeapons(updatedWeapons);
-      alert('تم الشراء بنجاح عبر المعاملة الذرية! تم إضافة الصنف إلى ترسانتك النشطة.');
+    // 3. فحص نجاح المعاملة: في حالة الفشل لن يتم خصم أي رصيد
+    if (!res.success) {
+      alert(`⚠️ فشلت عملية الشراء! لم يتم خصم أي رصيد من حسابك.`);
+      return false;
     }
+
+    // 4. تطبيق الأرصدة المؤكدة وتحديث كافة الحالات والمخازن فوراً
+    if (typeof res.newGold === 'number') setGold(res.newGold);
+    if (typeof res.newGems === 'number') setGems(res.newGems);
+    setWeapons(updatedWeapons);
+    setCrewInventory(updatedCrewInventory);
+    setShieldInventory(updatedShieldInventory);
+    setCrewServices(updatedCrewServices);
+    setShips(updatedShips);
+
+    localStorage.setItem('pirate_weapons', JSON.stringify(updatedWeapons));
+    localStorage.setItem('pirate_crew_inventory', JSON.stringify(updatedCrewInventory));
+    localStorage.setItem('pirate_shield_inventory', JSON.stringify(updatedShieldInventory));
+    localStorage.setItem('pirate_crew_services', JSON.stringify(updatedCrewServices));
+    localStorage.setItem('pirate_ships_v2', JSON.stringify(updatedShips));
+
+    alert(`🎉 تم الشراء بنجاح عبر المعاملة الذرية!\nتم خصم الرصيد وإضافة [${itemName}] مباشرة إلى مخزنك.`);
+    return true;
+  };
+
+  const buyItem = handlePurchase;
+
+  const buyWeaponItem = async (itemId: string, costType: 'gold' | 'blueGems', costValue: number) => {
+    const spec = WEAPONS_DATA.find(w => w.key === itemId || w.id === itemId);
+    const name = spec?.name || itemId;
+    await handlePurchase({
+      category: 'weapon',
+      itemId,
+      itemName: name,
+      costType: costType === 'gold' ? 'gold' : 'blueGems',
+      price: costValue
+    });
   };
 
   const buyCrewService = async (
@@ -5414,171 +5784,17 @@ export default function App() {
     costType?: 'gold' | 'gems',
     targetShipId?: string
   ) => {
-    if (!isNetworkOnline()) {
-      notifyOfflineBlocked(`توظيف أو صيانة طاقم (${name})`);
-      return;
-    }
-
     const spec = CREW_SHOP_ITEMS.find(item => item.id === key);
     const actualCostType = costType || (spec ? spec.costType : 'gems');
     const actualPrice = spec ? spec.price : price;
-    const assignedShipId = targetShipId || currentShipId || (ships.find(s => s.exists)?.id || 's1');
-    const shipObj = ships.find(s => s.id === assignedShipId);
-    const shipName = shipObj?.name || 'السفينة المحددة';
-
-    // If it is a fixer / repairer
-    if (key.startsWith('fixer')) {
-      if (actualCostType === 'gold' && gold < actualPrice) {
-        alert(`❌ الذهب غير كافٍ! تحتاج إلى ${actualPrice.toLocaleString()} 🪙 ذهب.`);
-        return;
-      }
-      if (actualCostType !== 'gold' && gems < actualPrice) {
-        alert(`❌ الجواهر غير كافية! تحتاج إلى ${actualPrice.toLocaleString()} 💎 جوهرة.`);
-        return;
-      }
-
-      let updatedShips = ships;
-      if (key === 'fixer_epic') {
-        updatedShips = ships.map(s => ({
-          ...s,
-          heart: 500 + (s.level || 0) * 100,
-          crewPower: (s.crewPower || 0) + 20
-        }));
-      } else {
-        const healAmt = key === 'fixer_sm' ? 100 : key === 'fixer_md' ? 250 : 500;
-        updatedShips = ships.map(s => {
-          if (s.id === assignedShipId) {
-            return {
-              ...s,
-              heart: (s.heart || 200) + healAmt,
-              crewPower: (s.crewPower || 0) + 10
-            };
-          }
-          return s;
-        });
-      }
-
-      const res = await executeFinancialTransaction({
-        goldDelta: actualCostType === 'gold' ? -actualPrice : 0,
-        gemsDelta: actualCostType !== 'gold' ? -actualPrice : 0,
-        ships: updatedShips,
-        reason: `شراء خدمة صيانة (${name})`,
-        onLocalApply: () => {
-          if (actualCostType === 'gold') setGold(prev => prev - actualPrice);
-          else setGems(prev => prev - actualPrice);
-          setShips(updatedShips);
-          localStorage.setItem('pirate_ships_v2', JSON.stringify(updatedShips));
-        }
-      });
-
-      if (res.success) {
-        if (typeof res.newGold === 'number') setGold(res.newGold);
-        if (typeof res.newGems === 'number') setGems(res.newGems);
-        setShips(updatedShips);
-        localStorage.setItem('pirate_ships_v2', JSON.stringify(updatedShips));
-        if (key === 'fixer_epic') {
-          alert(`👑 تم استخدام المصلح الأسطوري! تم صيانة وإصلاح كامل أسطول السفن بنجاح عبر المعاملة الذرية!`);
-        } else {
-          const healAmt = key === 'fixer_sm' ? 100 : key === 'fixer_md' ? 250 : 500;
-          alert(`🛠️ تم صيانة وإصلاح [${shipName}] بنجاح (+${healAmt} نقطة قوة وصحة)!`);
-        }
-      }
-      return;
-    }
-
-    const normalizedKey = key === 'police' ? 'cop' : key === 'sailors' ? 'sailor' : key === 'gold_fisher' ? 'golden_hunter' : key;
-
-    // Check if this crew is already assigned to this specific ship
-    if (shipObj?.assignedCrew?.includes(normalizedKey)) {
-      alert(`لقد قمت بتعيين [${name}] بالفعل على ظهر سفينة [${shipName}]!`);
-      return;
-    }
-
-    if (actualCostType === 'gold' && gold < actualPrice) {
-      alert(`❌ الذهب غير كافٍ لتوظيف ${name}! تحتاج إلى ${actualPrice.toLocaleString()} 🪙 ذهب.`);
-      return;
-    }
-    if (actualCostType !== 'gold' && gems < actualPrice) {
-      alert(`❌ الجواهر غير كافية لتوظيف ${name}! تحتاج إلى ${actualPrice.toLocaleString()} 💎 جوهرة.`);
-      return;
-    }
-
-    let updatedShips = ships;
-    let updatedCrewServices = { ...crewServices };
-
-    // Special logic for Golden Hunter: Assign to ALL 3 ships in the fleet for 24/7 autonomous fishing & collecting!
-    if (normalizedKey === 'golden_hunter') {
-      updatedShips = ships.map(s => {
-        if (s.exists) {
-          const currentCrew = s.assignedCrew || [];
-          const newCrew = currentCrew.includes('golden_hunter') ? currentCrew : [...currentCrew, 'golden_hunter'];
-          return {
-            ...s,
-            assignedCrew: newCrew,
-            crewPower: (s.crewPower || 0) + (currentCrew.includes('golden_hunter') ? 0 : 15),
-            autoFishingPaused: false
-          };
-        }
-        return s;
-      });
-
-      updatedCrewServices = {
-        ...crewServices,
-        golden_hunter: true,
-        gold_fisher: true,
-      };
-    } else {
-      updatedShips = ships.map(s => {
-        if (s.id === assignedShipId) {
-          const currentCrew = s.assignedCrew || [];
-          const newCrew = currentCrew.includes(normalizedKey) ? currentCrew : [...currentCrew, normalizedKey];
-          return {
-            ...s,
-            assignedCrew: newCrew,
-            crewPower: (s.crewPower || 0) + 15
-          };
-        }
-        return s;
-      });
-
-      updatedCrewServices = {
-        ...crewServices,
-        [normalizedKey]: true,
-        ...(normalizedKey === 'cop' ? { police: true } : {}),
-        ...(normalizedKey === 'sailor' ? { sailors: true } : {}),
-        ...(normalizedKey === 'golden_hunter' ? { gold_fisher: true } : {}),
-      };
-    }
-
-    const res = await executeFinancialTransaction({
-      goldDelta: actualCostType === 'gold' ? -actualPrice : 0,
-      gemsDelta: actualCostType !== 'gold' ? -actualPrice : 0,
-      ships: updatedShips,
-      reason: `توظيف طاقم (${name})`,
-      onLocalApply: () => {
-        if (actualCostType === 'gold') setGold(prev => prev - actualPrice);
-        else setGems(prev => prev - actualPrice);
-        setShips(updatedShips);
-        setCrewServices(updatedCrewServices);
-        localStorage.setItem('pirate_ships_v2', JSON.stringify(updatedShips));
-        localStorage.setItem('pirate_crew_services', JSON.stringify(updatedCrewServices));
-      }
+    await handlePurchase({
+      category: 'crew',
+      itemId: key,
+      itemName: name,
+      costType: actualCostType,
+      price: actualPrice,
+      targetShipId
     });
-
-    if (res.success) {
-      if (typeof res.newGold === 'number') setGold(res.newGold);
-      if (typeof res.newGems === 'number') setGems(res.newGems);
-      setShips(updatedShips);
-      setCrewServices(updatedCrewServices);
-      localStorage.setItem('pirate_ships_v2', JSON.stringify(updatedShips));
-      localStorage.setItem('pirate_crew_services', JSON.stringify(updatedCrewServices));
-
-      if (normalizedKey === 'golden_hunter') {
-        alert(`🎉 تم توظيف [${name}] وتعيينه على كافة سفن الأسطول (3 سفن) عبر المعاملة الذرية!`);
-      } else {
-        alert(`🎉 تهانينا! تم تعيين [${name}] بنجاح على ظهر سفينة [${shipName}] عبر المعاملة الذرية!`);
-      }
-    }
   };
 
   const toggleAutoFishing = (shipId: string) => {
@@ -5599,8 +5815,19 @@ export default function App() {
     });
   };
 
+  const normalizeCrewMemberKey = (key: string): string => {
+    if (key === 'police') return 'cop';
+    if (key === 'sailors') return 'sailor';
+    if (key === 'gold_fisher') return 'golden_hunter';
+    if (key === 'repairer_small' || key === 'smallRepair') return 'fixer_sm';
+    if (key === 'repairer_medium' || key === 'mediumRepair') return 'fixer_md';
+    if (key === 'repairer_large' || key === 'largeRepair') return 'fixer_lg';
+    if (key === 'repairer_legendary' || key === 'legendaryRepair') return 'fixer_epic';
+    return key;
+  };
+
   const assignCrewToAllShips = (key: string) => {
-    const normalizedKey = key === 'police' ? 'cop' : key === 'sailors' ? 'sailor' : key === 'gold_fisher' ? 'golden_hunter' : key;
+    const normalizedKey = normalizeCrewMemberKey(key);
     setShips(prev => {
       const updated = prev.map(s => {
         if (s.exists) {
@@ -5623,6 +5850,7 @@ export default function App() {
       const updated = {
         ...prev,
         [normalizedKey]: true,
+        [key]: true,
         ...(normalizedKey === 'cop' ? { police: true } : {}),
         ...(normalizedKey === 'sailor' ? { sailors: true } : {}),
         ...(normalizedKey === 'golden_hunter' ? { gold_fisher: true } : {}),
@@ -5633,7 +5861,7 @@ export default function App() {
   };
 
   const unassignCrewFromAllShips = (key: string) => {
-    const normalizedKey = key === 'police' ? 'cop' : key === 'sailors' ? 'sailor' : key === 'gold_fisher' ? 'golden_hunter' : key;
+    const normalizedKey = normalizeCrewMemberKey(key);
     setShips(prev => {
       const updated = prev.map(s => {
         const currentCrew = s.assignedCrew || [];
@@ -5660,7 +5888,7 @@ export default function App() {
   };
 
   const unassignCrewFromShip = (key: string, shipId: string) => {
-    const normalizedKey = key === 'police' ? 'cop' : key === 'sailors' ? 'sailor' : key === 'gold_fisher' ? 'golden_hunter' : key;
+    const normalizedKey = normalizeCrewMemberKey(key);
     setShips(prev => {
       const updated = prev.map(s => {
         if (s.id === shipId) {
@@ -8237,6 +8465,11 @@ export default function App() {
           setWeapons={setWeapons}
           crewServices={crewServices}
           setCrewServices={setCrewServices}
+          crewInventory={crewInventory}
+          setCrewInventory={setCrewInventory}
+          shieldInventory={shieldInventory}
+          setShieldInventory={setShieldInventory}
+          handlePurchase={handlePurchase}
           onClose={() => setActiveTab('harbor')}
         />
       )}
@@ -8270,676 +8503,44 @@ export default function App() {
 
       {/* ----------------- PORTFOLIO / SETTINGS TAB (البروفايل) ----------------- */}
       {activeTab === 'settings' && (
-        <div className="tab-overlay" style={{
-          background: 'linear-gradient(to bottom, #030a16, #02050b)',
-          border: '2px solid rgba(250, 204, 21, 0.25)',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.95), inset 0 0 35px rgba(234, 179, 8, 0.08)',
-          padding: '24px 20px 140px 20px',
-          fontFamily: 'Cairo, sans-serif',
-          color: '#e2e8f0',
-          minHeight: '100%'
-        }}>
-          {/* Header with Title and Settings Icon */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            marginBottom: '24px',
-            position: 'relative'
-          }}>
-            <h2 style={{
-              fontSize: '22px',
-              fontWeight: '900',
-              color: '#facc15',
-              margin: 0,
-              textShadow: '0 0 15px rgba(250, 204, 21, 0.5)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              letterSpacing: '0.5px'
-            }}>
-              ⚙️ الإعدادات
-            </h2>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-            {/* 1. Language Box (اللغة) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', direction: 'rtl' }}>
-              <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'bold' }}>اللغة</span>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                {/* Arabic Button */}
-                <button
-                  onClick={() => {
-                    setLanguage('ar');
-                    showToast('تم تحويل اللغة إلى العربية بنجاح!', 'success');
-                  }}
-                  style={{
-                    flex: 1,
-                    background: language === 'ar' ? 'linear-gradient(135deg, #b45309, #d97706)' : '#071221',
-                    color: '#fff',
-                    border: language === 'ar' ? '1.5px solid #facc15' : '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '10px',
-                    padding: '12px',
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: language === 'ar' ? '0 4px 15px rgba(217, 119, 6, 0.35)' : 'none'
-                  }}
-                >
-                  <span style={{ fontSize: '18px' }}>🇪🇬</span>
-                  <span>العربية</span>
-                </button>
-
-                {/* English Button */}
-                <button
-                  onClick={() => {
-                    setLanguage('en');
-                    showToast('Language updated to English successfully!', 'success');
-                  }}
-                  style={{
-                    flex: 1,
-                    background: language === 'en' ? 'linear-gradient(135deg, #b45309, #d97706)' : '#071221',
-                    color: '#fff',
-                    border: language === 'en' ? '1.5px solid #facc15' : '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '10px',
-                    padding: '12px',
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: language === 'en' ? '0 4px 15px rgba(217, 119, 6, 0.35)' : 'none'
-                  }}
-                >
-                  <span style={{ fontSize: '18px' }}>🇺🇸</span>
-                  <span>English</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. Account Connection Box (تواصل الحساب والمزامنة السحابية) */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', direction: 'rtl' }}>
-              <span style={{ fontSize: '14px', color: '#94a3b8', fontWeight: 'bold' }}>تواصل الحساب والمزامنة السحابية</span>
-              <div style={{
-                background: '#061325',
-                border: '1px solid rgba(250, 204, 21, 0.15)',
-                borderRadius: '12px',
-                padding: '14px 16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '12px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#e2e8f0', fontSize: '14px' }}>
-                    <span style={{ fontSize: '18px' }}>✉️</span>
-                    <span style={{ fontWeight: 'bold', letterSpacing: '0.3px', wordBreak: 'break-all' }}>
-                      {auth.currentUser?.email || localStorage.getItem('google_auth_email') || 'لم يتم الربط ببريد'}
-                    </span>
-                  </div>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(34, 197, 94, 0.12)',
-                    border: '1px solid #22c55e',
-                    borderRadius: '8px',
-                    padding: '4px 10px',
-                    color: '#22c55e',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    <span>متزامن ومحفوظ</span>
-                    <span style={{ fontSize: '14px' }}>🛡️</span>
-                  </div>
-                </div>
-
-                {/* Account Cloud Sync Action Button */}
-                <button
-                  onClick={handleSyncAccount}
-                  style={{
-                    width: '100%',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    color: '#ffffff',
-                    border: '1px solid rgba(52, 211, 153, 0.4)',
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    fontWeight: 'bold',
-                    fontSize: '13.5px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    boxShadow: '0 3px 10px rgba(16, 185, 129, 0.25)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <span style={{ fontSize: '16px' }}>🔄</span>
-                  <span>مزامنة وتحديث بيانات الحساب والبريد الإلكتروني الآن</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. The 12 Toggle Controls Section */}
-            <div style={{
-              background: '#061325',
-              border: '1px solid rgba(250, 204, 21, 0.12)',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-              
-              {/* Toggle Row Helper Component styled cleanly in JS */}
-              {[
-                {
-                  id: 'music',
-                  icon: '🎵',
-                  label: 'الموسيقى الخلفية',
-                  checked: !isMusicMuted,
-                  action: () => {
-                    setIsMusicMuted(!isMusicMuted);
-                    showToast(!isMusicMuted ? '🔇 تم كتم الموسيقى الخلفية' : '🎵 تم تشغيل الموسيقى الخلفية', 'success');
-                  }
-                },
-                {
-                  id: 'sfx',
-                  icon: '🔊',
-                  label: 'المؤثرات الصوتية',
-                  checked: !isSfxMuted,
-                  action: () => {
-                    setIsSfxMuted(!isSfxMuted);
-                    showToast(!isSfxMuted ? '🔇 تم كتم المؤثرات الصوتية' : '🔊 تم تشغيل المؤثرات الصوتية', 'success');
-                  }
-                },
-                {
-                  id: 'sound_tones',
-                  icon: '🔊',
-                  label: 'إظهار نغمات الصوت',
-                  checked: showSoundTones,
-                  action: () => {
-                    setShowSoundTones(!showSoundTones);
-                    showToast(!showSoundTones ? '❌ تم إيقاف نغمات الصوت' : '🔊 تم تفعيل نغمات الصوت', 'success');
-                  }
-                },
-                {
-                  id: 'attack_announcements',
-                  icon: '⚔️',
-                  label: 'إظهار إعلانات الهجوم',
-                  checked: showAttackNotifications,
-                  action: () => {
-                    setShowAttackNotifications(!showAttackNotifications);
-                    showToast(!showAttackNotifications ? '❌ تم إيقاف إعلانات الهجوم' : '⚔️ تم تفعيل إعلانات الهجوم', 'success');
-                  }
-                },
-                {
-                  id: 'chest_announcements',
-                  icon: '📦',
-                  label: 'إظهار إعلانات الصندوق',
-                  checked: showChestNotifications,
-                  action: () => {
-                    setShowChestNotifications(!showChestNotifications);
-                    showToast(!showChestNotifications ? '❌ تم إيقاف إعلانات الصندوق' : '📦 تم تفعيل إعلانات الصندوق', 'success');
-                  }
-                },
-                {
-                  id: 'customize_icon_positions',
-                  icon: '🎛️',
-                  label: 'تخصيص وظائف الأيقونات',
-                  checked: customizeIconFunctions,
-                  action: () => {
-                    setCustomizeIconFunctions(!customizeIconFunctions);
-                    showToast(!customizeIconFunctions ? '❌ تم إيقاف تخصيص وظائف الأيقونات' : '🎛️ تم تفعيل تخصيص وظائف الأيقونات', 'success');
-                  }
-                },
-                {
-                  id: 'related_alerts',
-                  icon: '🔔',
-                  label: 'إظهار التنبيهات المتعلقة',
-                  checked: showRelatedAlerts,
-                  action: () => {
-                    setShowRelatedAlerts(!showRelatedAlerts);
-                    showToast(!showRelatedAlerts ? '❌ تم إيقاف التنبيهات المتعلقة' : '🔔 تم تفعيل التنبيهات المتعلقة', 'success');
-                  }
-                },
-                {
-                  id: 'disable_quick_chat',
-                  icon: '💬',
-                  label: 'إيقاف الكتابة السريعة',
-                  checked: disableQuickChat,
-                  action: () => {
-                    setDisableQuickChat(!disableQuickChat);
-                    showToast(!disableQuickChat ? '💬 تم تفعيل الكتابة السريعة' : '🔇 تم إيقاف الكتابة السريعة', 'success');
-                  }
-                },
-                {
-                  id: 'power_saver_login',
-                  icon: '🔋',
-                  label: 'موفر الطاقة أثناء التسجيل',
-                  checked: powerSaverLogin,
-                  action: () => {
-                    setPowerSaverLogin(!powerSaverLogin);
-                    // Also hook to main powerSaver state for actual functionality
-                    setPowerSaver(!powerSaverLogin);
-                    showToast(!powerSaverLogin ? '🔋 تم تفعيل موفر الطاقة' : '❌ تم إيقاف موفر الطاقة', 'success');
-                  }
-                },
-                {
-                  id: 'common_alerts',
-                  icon: '⚠️',
-                  label: 'إظهار التنبيهات الشائعة',
-                  checked: showPopupAlerts,
-                  action: () => {
-                    setShowPopupAlerts(!showPopupAlerts);
-                    showToast(!showPopupAlerts ? '❌ تم إيقاف التنبيهات الشائعة' : '⚠️ تم تفعيل التنبيهات الشائعة', 'success');
-                  }
-                },
-                {
-                  id: 'stop_rogue_alliances',
-                  icon: '🏳️',
-                  label: 'إيقاف التحالفات المنحرفة',
-                  checked: stopRogueAlliances,
-                  action: () => {
-                    setStopRogueAlliances(!stopRogueAlliances);
-                    showToast(!stopRogueAlliances ? '🏳️ تم إيقاف التحالفات المنحرفة' : '❌ تم تفعيل التحالفات المنحرفة', 'success');
-                  }
-                },
-                {
-                  id: 'heating_energy_index',
-                  icon: '🌡️',
-                  label: 'مؤشر الطاقة أثناء التسخين',
-                  checked: heatingEnergyIndex,
-                  action: () => {
-                    setHeatingEnergyIndex(!heatingEnergyIndex);
-                    showToast(!heatingEnergyIndex ? '🌡️ تم تفعيل مؤشر الطاقة أثناء التسخين' : '❌ تم إيقاف مؤشر الطاقة أثناء التسخين', 'success');
-                  }
-                }
-              ].map((row, idx, arr) => (
-                <div key={row.id} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '14px 16px',
-                  borderBottom: idx !== arr.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none',
-                  direction: 'rtl'
-                }}>
-                  {/* Right: Icon & Text */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '18px', width: '24px', textAlign: 'center' }}>{row.icon}</span>
-                    <span style={{ fontSize: '14px', color: '#e2e8f0', fontWeight: 'bold' }}>{row.label}</span>
-                  </div>
-
-                  {/* Left: Custom Switch Toggle */}
-                  <div 
-                    onClick={row.action}
-                    style={{
-                      width: '46px',
-                      height: '24px',
-                      borderRadius: '100px',
-                      background: row.checked ? '#22c55e' : '#1e293b',
-                      position: 'relative',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.25s',
-                      border: '1px solid rgba(255,255,255,0.08)'
-                    }}
-                  >
-                    <div style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      background: '#ffffff',
-                      position: 'absolute',
-                      top: '2px',
-                      left: row.checked ? '25px' : '3px',
-                      transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                      boxShadow: '0 2px 5px rgba(0,0,0,0.45)'
-                    }} />
-                  </div>
-                </div>
-              ))}
-
-            </div>
-
-            {/* 4. Action Buttons Styled Elegantly like Reference Image */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              
-              {/* Customize Icon Layout Button (Purple) */}
-              <button
-                onClick={() => setActiveSettingsModal('icons')}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #6b21a8, #4c1d95)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(168, 85, 247, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(107, 33, 168, 0.3)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🎛️</span>
-                <span>تخصيص مواقع الأيقونات</span>
-              </button>
-
-              {/* Technical Support Ticket Button (Orange/Red) */}
-              <button
-                onClick={() => setActiveSettingsModal('ticket')}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #ea580c, #9a3412)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(249, 115, 22, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(234, 88, 12, 0.3)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🎧</span>
-                <span>الدعم الفني - إنشاء تذكرة</span>
-              </button>
-
-              {/* Telegram Channel Button (Blue) */}
-              <button
-                onClick={() => {
-                  window.open('https://t.me/hycsp', '_blank');
-                  showToast('جاري توجيهك إلى قناة تيليجرام اللعبة... 📢', 'success');
-                }}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #0284c7, #0369a1)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(56, 189, 248, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>📢</span>
-                <span>قناة اللعبة على تيليجرام</span>
-              </button>
-
-              {/* Join Discord Button (Indigo/Navy) */}
-              <button
-                onClick={() => {
-                  window.open('https://discord.gg/kingsdeep', '_blank');
-                  showToast('جاري توجيهك إلى ديسكورد اللعبة الرسمي... 🎮', 'success');
-                }}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #3b82f6, #1d4ed8)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(96, 165, 250, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🎮</span>
-                <span>إنضمام إلى ديسكورد</span>
-              </button>
-
-              {/* Change Email Button (Sky Blue) */}
-              <button
-                onClick={() => setActiveSettingsModal('email')}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #0284c7, #1e3a8a)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(14, 165, 233, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(2, 132, 199, 0.2)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>✉️</span>
-                <span>تغيير البريد الإلكتروني</span>
-              </button>
-
-              {/* Change Password Button (Green) */}
-              <button
-                onClick={() => handleSendPasswordReset()}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #10b981, #064e3b)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(52, 211, 153, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🔒</span>
-                <span>تغيير كلمة المرور</span>
-              </button>
-
-              {/* Recover Password Button (Brown/Orange) */}
-              <button
-                onClick={() => handleSendPasswordReset()}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #d97706, #78350f)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(251, 191, 36, 0.3)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(217, 119, 6, 0.2)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🔑</span>
-                <span>استعادة كلمة المرور عبر البريد</span>
-              </button>
-
-              {/* Logout Button (Deep Red) */}
-              <button
-                onClick={() => {
-                  if (window.confirm('هل تريد حقاً تسجيل الخروج والعودة لشاشة البدء؟')) {
-                    handleLogout();
-                  }
-                }}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(180deg, #be123c, #4c0519)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(251, 113, 133, 0.35)',
-                  borderRadius: '12px',
-                  padding: '14px 18px',
-                  fontWeight: 'bold',
-                  fontSize: '14.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  boxShadow: '0 4px 12px rgba(190, 18, 60, 0.35)',
-                  transition: 'transform 0.15s ease',
-                  direction: 'rtl'
-                }}
-              >
-                <span style={{ fontSize: '16px' }}>🚪</span>
-                <span>تسجيل الخروج</span>
-              </button>
-
-            </div>
-
-            {/* 5. Danger Zone (منطقة الخطر) */}
-            <div style={{
-              background: 'rgba(159, 18, 57, 0.12)',
-              border: '1.5px solid #be123c',
-              borderRadius: '16px',
-              padding: '16px',
-              marginTop: '10px',
-              direction: 'rtl'
-            }}>
-              <h4 style={{ margin: '0 0 8px 0', color: '#f87171', fontSize: '15px', fontWeight: 'bold' }}>منطقة الخطر ⚠️</h4>
-              <p style={{ margin: '0 0 14px 0', fontSize: '11px', color: '#fda4af', lineHeight: '1.5' }}>
-                يحذف حسابك وكل بياناتك بشكل دائم. لا يمكن التراجع.
-              </p>
-              
-              <button
-                onClick={() => {
-                  setActiveSettingsModal('delete');
-                }}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(135deg, #be123c, #9f1239)',
-                  color: '#fff',
-                  border: '1px solid #fda4af',
-                  borderRadius: '12px',
-                  padding: '12px',
-                  fontWeight: 'bold',
-                  fontSize: '13.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  boxShadow: '0 4px 12px rgba(190, 18, 60, 0.2)'
-                }}
-              >
-                <span>حذف الحساب نهائياً</span>
-                <span>🗑️</span>
-              </button>
-            </div>
-
-            {/* 6. Update Game Button (تحديث اللعبة لآخر إصدار) */}
-            <div style={{
-              background: 'rgba(9, 21, 35, 0.5)',
-              border: '1px solid rgba(6, 182, 212, 0.15)',
-              borderRadius: '16px',
-              padding: '16px',
-              marginTop: '10px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px'
-            }}>
-              <button
-                onClick={() => {
-                  handleUpdateGameVersion();
-                }}
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(135deg, #0ea5e9, #0284c7)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '12px',
-                  fontWeight: 'bold',
-                  fontSize: '13.5px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span>تحديث اللعبة لآخر إصدار</span>
-                <span>🔄</span>
-              </button>
-              <p style={{ margin: 0, fontSize: '10px', color: '#94a3b8', textAlign: 'center', lineHeight: '1.4' }}>
-                اضغط هذا الزر إذا ما يظهر عندك آخر تحديث للعبة.
-              </p>
-            </div>
-
-
-
-            {/* Version Text */}
-            <div style={{ margin: '10px 0', fontSize: '13px', color: '#ca8a04', fontWeight: 'bold', textAlign: 'center' }}>
-              الإصدار 1.0 — Ocean Catch
-            </div>
-
-            {/* Close Button at the bottom */}
-            <button
-              onClick={() => setActiveTab('harbor')}
-              style={{
-                width: '100%',
-                background: 'linear-gradient(to bottom, #d97706, #b45309)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '14px',
-                padding: '14px 18px',
-                fontWeight: 'bold',
-                fontSize: '16px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(217, 119, 6, 0.3)'
-              }}
-            >
-              إغلاق
-            </button>
-
-          </div>
+        <div style={{ position: 'relative', width: '100%', minHeight: '100%' }}>
+          <SettingsView
+            language={language}
+            setLanguage={setLanguage}
+            userEmail={auth.currentUser?.email || localStorage.getItem('google_auth_email') || 'ttwk29818@gmail.com'}
+            handleSyncAccount={handleSyncAccount}
+            isMusicMuted={isMusicMuted}
+            setIsMusicMuted={setIsMusicMuted}
+            isSfxMuted={isSfxMuted}
+            setIsSfxMuted={setIsSfxMuted}
+            showSoundTones={showSoundTones}
+            setShowSoundTones={setShowSoundTones}
+            showAttackNotifications={showAttackNotifications}
+            setShowAttackNotifications={setShowAttackNotifications}
+            showChestNotifications={showChestNotifications}
+            setShowChestNotifications={setShowChestNotifications}
+            customizeIconFunctions={customizeIconFunctions}
+            setCustomizeIconFunctions={setCustomizeIconFunctions}
+            showRelatedAlerts={showRelatedAlerts}
+            setShowRelatedAlerts={setShowRelatedAlerts}
+            disableQuickChat={disableQuickChat}
+            setDisableQuickChat={setDisableQuickChat}
+            powerSaverLogin={powerSaverLogin}
+            setPowerSaverLogin={setPowerSaverLogin}
+            setPowerSaver={setPowerSaver}
+            showPopupAlerts={showPopupAlerts}
+            setShowPopupAlerts={setShowPopupAlerts}
+            stopRogueAlliances={stopRogueAlliances}
+            setStopRogueAlliances={setStopRogueAlliances}
+            heatingEnergyIndex={heatingEnergyIndex}
+            setHeatingEnergyIndex={setHeatingEnergyIndex}
+            setActiveSettingsModal={setActiveSettingsModal}
+            handleSendPasswordReset={handleSendPasswordReset}
+            handleLogout={handleLogout}
+            showToast={showToast}
+            onClose={() => setActiveTab('harbor')}
+            handleUpdateGameVersion={handleUpdateGameVersion}
+          />
 
           {/* Interactive Modal Popups / Overlays inside settings */}
           {activeSettingsModal === 'ticket' && (
@@ -9191,6 +8792,10 @@ export default function App() {
           setWeapons={setWeapons}
           crewServices={crewServices}
           setCrewServices={setCrewServices}
+          crewInventory={crewInventory}
+          setCrewInventory={setCrewInventory}
+          shieldInventory={shieldInventory}
+          setShieldInventory={setShieldInventory}
           ships={ships}
           setShips={setShips}
           bgTheme={bgTheme}
@@ -9204,6 +8809,8 @@ export default function App() {
           buyWeaponItem={buyWeaponItem}
           buyCrewService={buyCrewService}
           buyShopItem={buyShopItem}
+          handlePurchase={handlePurchase}
+          buyItem={handlePurchase}
           confirmUpgradeShip={confirmUpgradeShip}
           upgradeTargetSpec={upgradeTargetSpec}
           setUpgradeTargetSpec={setUpgradeTargetSpec}
@@ -9372,12 +8979,26 @@ export default function App() {
                       <div style={{ color: '#451a03', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>صاروخ صغير</div>
                       
                       {/* Small Rocket Image */}
-                      <div style={{ height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '6px 0' }}>
+                      <div style={{
+                        height: '70px',
+                        width: '70px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '6px 0',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        backgroundImage: `url(${WEAPON_SMALL_MISSILE_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        border: '1.5px solid rgba(180, 83, 9, 0.5)',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.5)'
+                      }}>
                         <img 
                           src={WEAPON_SMALL_MISSILE_ICON} 
                           alt="صاروخ صغير" 
                           referrerPolicy="no-referrer"
-                          style={{ maxHeight: '68px', maxWidth: '68px', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))' }}
+                          style={{ maxHeight: '56px', maxWidth: '56px', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))' }}
                         />
                       </div>
 
@@ -9438,12 +9059,26 @@ export default function App() {
                       <div style={{ color: '#451a03', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>صاروخ متوسط</div>
                       
                       {/* Medium Rocket Image */}
-                      <div style={{ height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '6px 0' }}>
+                      <div style={{
+                        height: '70px',
+                        width: '70px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '6px 0',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        backgroundImage: `url(${WEAPON_MEDIUM_MISSILE_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        border: '1.5px solid rgba(194, 65, 12, 0.5)',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.5)'
+                      }}>
                         <img 
                           src={WEAPON_MEDIUM_MISSILE_ICON} 
                           alt="صاروخ متوسط" 
                           referrerPolicy="no-referrer"
-                          style={{ maxHeight: '68px', maxWidth: '68px', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))' }}
+                          style={{ maxHeight: '56px', maxWidth: '56px', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))' }}
                         />
                       </div>
 
@@ -9504,12 +9139,26 @@ export default function App() {
                       <div style={{ color: '#451a03', fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>صاروخ كبير</div>
                       
                       {/* Large Rocket Image */}
-                      <div style={{ height: '70px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '6px 0' }}>
+                      <div style={{
+                        height: '70px',
+                        width: '70px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '6px 0',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        backgroundImage: `url(${WEAPON_LARGE_MISSILE_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        border: '1.5px solid rgba(133, 77, 14, 0.5)',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.5)'
+                      }}>
                         <img 
                           src={WEAPON_LARGE_MISSILE_ICON} 
                           alt="صاروخ كبير" 
                           referrerPolicy="no-referrer"
-                          style={{ maxHeight: '68px', maxWidth: '68px', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))' }}
+                          style={{ maxHeight: '56px', maxWidth: '56px', objectFit: 'contain', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))' }}
                         />
                       </div>
 
@@ -13162,10 +12811,10 @@ export default function App() {
                       <div style={{ fontSize: '11px', color: '#cbd5e1' }}>"سأصبح ملك القراصنة! ههههههاا!"</div>
                     </>
                   )}
-                  {inspectedPlayer.activeAd === 'jack_sabro' && (
+                  {(inspectedPlayer.activeAd === 'jack_sabro' || inspectedPlayer.activeAd === 'deep_dragon') && (
                     <>
                       <div style={{ fontSize: '40px', animation: 'bounce 2s infinite' }}>🦎</div>
-                      <div style={{ fontSize: '14px', fontWeight: '900', color: '#38bdf8' }}>جاك سابرو</div>
+                      <div style={{ fontSize: '14px', fontWeight: '900', color: '#38bdf8' }}>تنين الأعماق</div>
                       <div style={{ fontSize: '11px', color: '#cbd5e1' }}>مغامرات الزواحف المائية الكبرى!</div>
                     </>
                   )}
@@ -13549,6 +13198,12 @@ export default function App() {
                     {!inspectedPlayer.portDestroyed && (
                       <button
                         onClick={() => {
+                          const validation = validateAttackOrSteal();
+                          if (!validation.allowed) {
+                            alert(validation.message);
+                            showToast(validation.message, 'error');
+                            return;
+                          }
                           setShowWeaponSelector(true);
                         }}
                         style={{
@@ -13589,6 +13244,12 @@ export default function App() {
                         </div>
                         <button
                           onClick={() => {
+                            const validation = validateAttackOrSteal();
+                            if (!validation.allowed) {
+                              alert(validation.message);
+                              showToast(validation.message, 'error');
+                              return;
+                            }
                             setSelectedLootCard(null);
                             setLootResultText('');
                             setShowLootSelector(true);
@@ -13645,7 +13306,15 @@ export default function App() {
                     }}>
                       {/* Steal Button */}
                       <button 
-                        onClick={() => setActiveInteractionType('steal')}
+                        onClick={() => {
+                          const validation = validateAttackOrSteal();
+                          if (!validation.allowed) {
+                            alert(validation.message);
+                            showToast(validation.message, 'error');
+                            return;
+                          }
+                          setActiveInteractionType('steal');
+                        }}
                         style={{
                           background: 'linear-gradient(to bottom, #ca8a04, #a16207)',
                           border: '1px solid #fef08a',
@@ -13717,6 +13386,8 @@ export default function App() {
                       <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
                         {ships.filter(s => s.exists).map(s => {
                           const isSelected = selectedOwnShipId === s.id;
+                          const sLevel = getShipEffectiveLevel(s);
+                          const isLevelValid = sLevel >= 6;
                           return (
                             <div 
                               key={s.id}
@@ -13735,11 +13406,37 @@ export default function App() {
                             >
                               <div style={{ fontSize: '20px' }}>{s.imgEmoji || '⛵'}</div>
                               <div style={{ fontWeight: 'bold', fontSize: '10px', color: isSelected ? '#fcd34d' : '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</div>
-                              <div style={{ fontSize: '9px', color: '#cbd5e1' }}>مستوى {s.level}</div>
+                              <div style={{ fontSize: '9px', color: isLevelValid ? '#4ade80' : '#f87171', fontWeight: 'bold', marginTop: '2px' }}>
+                                مستوى {sLevel} {isLevelValid ? '✓' : '(أقل من 6)'}
+                              </div>
                             </div>
                           );
                         })}
                       </div>
+
+                      {/* Ship Level Requirement Warning Banner */}
+                      {(() => {
+                        const curShip = ships.find(s => s.id === selectedOwnShipId);
+                        const curLvl = curShip ? getShipEffectiveLevel(curShip) : 0;
+                        if (curLvl < 6) {
+                          return (
+                            <div style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid #ef4444',
+                              borderRadius: '6px',
+                              padding: '6px 10px',
+                              color: '#fca5a5',
+                              fontSize: '11px',
+                              textAlign: 'center',
+                              marginTop: '6px',
+                              fontWeight: 'bold'
+                            }}>
+                              ⚠️ يجب أن تكون سفنك بمستوى 6 وما فوق لتتمكن من الهجوم أو السرقة! (مستوى هذه السفينة: {curLvl})
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
 
                     {/* Step 2: Thief Status & Target Cop Status */}
@@ -13825,6 +13522,14 @@ export default function App() {
                     {/* Start Steal Button */}
                     <button
                       onClick={async () => {
+                        // التحقق من شرط مستوى السفينة/السفن (مستوى 6 وما فوق)
+                        const validation = validateAttackOrSteal(selectedOwnShipId);
+                        if (!validation.allowed) {
+                          alert(validation.message);
+                          showToast(validation.message, 'error');
+                          return;
+                        }
+
                         const hasThief = !!crewServices.thief;
                         
                         // 1. Check if player has Thief
@@ -14319,6 +14024,12 @@ export default function App() {
                   {/* 1. رسالة التفجير */}
                   <div 
                     onClick={() => {
+                      const validation = validateAttackOrSteal();
+                      if (!validation.allowed) {
+                        alert(validation.message);
+                        showToast(validation.message, 'error');
+                        return;
+                      }
                       const qty = weapons.adBomb || weapons.emp_bomb || 0;
                       if (qty <= 0) {
                         alert("❌ لا تملك هذا السلاح!");
@@ -14343,7 +14054,23 @@ export default function App() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                       <span style={{ fontSize: '12px', color: '#4ade80', background: '#14532d', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.adBomb !== undefined ? weapons.adBomb : (weapons.emp_bomb !== undefined ? weapons.emp_bomb : 0))}x</span>
-                      <img src={WEAPON_MEDIA_BOMB_ICON} alt="رسالة التفجير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <div style={{
+                        position: 'relative',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        border: '1.5px solid rgba(74, 222, 128, 0.5)',
+                        backgroundImage: `url(${WEAPON_MEDIA_BOMB_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.6)'
+                      }}>
+                        <img src={WEAPON_MEDIA_BOMB_ICON} alt="رسالة التفجير" referrerPolicy="no-referrer" style={{ width: '40px', height: '40px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.85))', position: 'relative', zIndex: 2 }} />
+                      </div>
                     </div>
                     <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
                       <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#4ade80' }}>رسالة التفجير</div>
@@ -14381,7 +14108,23 @@ export default function App() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                       <span style={{ fontSize: '12px', color: '#fca5a5', background: '#7f1d1d', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.atomicBomb !== undefined ? weapons.atomicBomb : (weapons.nuke_bomb !== undefined ? weapons.nuke_bomb : 0))}x</span>
-                      <img src={WEAPON_ATOMIC_BOMB_ICON} alt="قنبلة الموت الأسود" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <div style={{
+                        position: 'relative',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        border: '1.5px solid rgba(239, 68, 68, 0.5)',
+                        backgroundImage: `url(${WEAPON_ATOMIC_BOMB_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.6)'
+                      }}>
+                        <img src={WEAPON_ATOMIC_BOMB_ICON} alt="قنبلة الموت الأسود" referrerPolicy="no-referrer" style={{ width: '40px', height: '40px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.85))', position: 'relative', zIndex: 2 }} />
+                      </div>
                     </div>
                     <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
                       <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fca5a5' }}>قنبلة الموت الأسود</div>
@@ -14404,25 +14147,45 @@ export default function App() {
                       handleLaunchSmallRocket(selectedVisitedShip);
                     }}
                     style={{
-                      background: 'rgba(24, 24, 27, 0.6)',
-                      border: '1px solid #3f3f46',
+                      background: 'linear-gradient(135deg, rgba(234, 88, 12, 0.12) 0%, rgba(24, 24, 27, 0.6) 100%)',
+                      border: '1.5px solid rgba(234, 88, 12, 0.4)',
                       borderRadius: '12px',
                       padding: '12px',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 15px rgba(234, 88, 12, 0.1)'
                     }}
-                    className="hover:bg-zinc-800 hover:border-zinc-500"
+                    className="hover:bg-[rgba(234,88,12,0.2)] hover:border-amber-600"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.smallRocket !== undefined ? weapons.smallRocket : (weapons.small_missile !== undefined ? weapons.small_missile : 0))}x</span>
-                      <img src={WEAPON_SMALL_MISSILE_ICON} alt="صاروخ صغير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <span style={{ fontSize: '12px', color: '#ffedd5', background: '#7c2d12', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.smallRocket !== undefined ? weapons.smallRocket : (weapons.small_missile !== undefined ? weapons.small_missile : 0))}x</span>
+                      <div style={{
+                        position: 'relative',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        border: '1.5px solid rgba(234, 88, 12, 0.5)',
+                        backgroundImage: `url(${WEAPON_SMALL_MISSILE_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.6)'
+                      }}>
+                        <img src={WEAPON_SMALL_MISSILE_ICON} alt="صاروخ صغير" referrerPolicy="no-referrer" style={{ width: '40px', height: '40px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.85))', position: 'relative', zIndex: 2 }} />
+                      </div>
                     </div>
                     <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ صغير</div>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fed7aa' }}>صاروخ صغير</div>
                       <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 1,000 ⚔️ (100,000 🪙)</div>
+                      <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.3', marginTop: '2px' }}>
+                        صاروخ صغير وسريع لتوجيه ضربة مباشرة تلحق 1,000 ضرر
+                      </div>
                     </div>
                   </div>
 
@@ -14438,25 +14201,45 @@ export default function App() {
                       handleLaunchMediumRocket(selectedVisitedShip);
                     }}
                     style={{
-                      background: 'rgba(24, 24, 27, 0.6)',
-                      border: '1px solid #3f3f46',
+                      background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(24, 24, 27, 0.6) 100%)',
+                      border: '1.5px solid rgba(249, 115, 22, 0.4)',
                       borderRadius: '12px',
                       padding: '12px',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 15px rgba(249, 115, 22, 0.1)'
                     }}
-                    className="hover:bg-zinc-800 hover:border-zinc-500"
+                    className="hover:bg-[rgba(249,115,22,0.2)] hover:border-orange-500"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.mediumRocket !== undefined ? weapons.mediumRocket : (weapons.medium_missile !== undefined ? weapons.medium_missile : 0))}x</span>
-                      <img src={WEAPON_MEDIUM_MISSILE_ICON} alt="صاروخ المتوسط" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <span style={{ fontSize: '12px', color: '#fed7aa', background: '#9a3412', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.mediumRocket !== undefined ? weapons.mediumRocket : (weapons.medium_missile !== undefined ? weapons.medium_missile : 0))}x</span>
+                      <div style={{
+                        position: 'relative',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        border: '1.5px solid rgba(249, 115, 22, 0.5)',
+                        backgroundImage: `url(${WEAPON_MEDIUM_MISSILE_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.6)'
+                      }}>
+                        <img src={WEAPON_MEDIUM_MISSILE_ICON} alt="صاروخ المتوسط" referrerPolicy="no-referrer" style={{ width: '40px', height: '40px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.85))', position: 'relative', zIndex: 2 }} />
+                      </div>
                     </div>
                     <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ المتوسط</div>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fed7aa' }}>صاروخ المتوسط</div>
                       <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 5,000 ⚔️ (200,000 🪙)</div>
+                      <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.3', marginTop: '2px' }}>
+                        صاروخ متوسط القوة يخترق الدروع ويلحق 5,000 ضرر بهيكل السفينة
+                      </div>
                     </div>
                   </div>
 
@@ -14472,25 +14255,45 @@ export default function App() {
                       handleLaunchLargeRocket(selectedVisitedShip);
                     }}
                     style={{
-                      background: 'rgba(24, 24, 27, 0.6)',
-                      border: '1px solid #3f3f46',
+                      background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.12) 0%, rgba(24, 24, 27, 0.6) 100%)',
+                      border: '1.5px solid rgba(234, 179, 8, 0.4)',
                       borderRadius: '12px',
                       padding: '12px',
                       cursor: 'pointer',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      transition: 'all 0.2s'
+                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 15px rgba(234, 179, 8, 0.1)'
                     }}
-                    className="hover:bg-zinc-800 hover:border-zinc-500"
+                    className="hover:bg-[rgba(234,179,8,0.2)] hover:border-yellow-500"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                      <span style={{ fontSize: '12px', color: '#cbd5e1', background: '#3f3f46', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.largeRocket !== undefined ? weapons.largeRocket : (weapons.large_missile !== undefined ? weapons.large_missile : 0))}x</span>
-                      <img src={WEAPON_LARGE_MISSILE_ICON} alt="صاروخ كبير" referrerPolicy="no-referrer" style={{ width: '48px', height: '48px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.5))' }} />
+                      <span style={{ fontSize: '12px', color: '#fef08a', background: '#854d0e', padding: '3px 8px', borderRadius: '6px', fontWeight: 'bold' }}>{(weapons.largeRocket !== undefined ? weapons.largeRocket : (weapons.large_missile !== undefined ? weapons.large_missile : 0))}x</span>
+                      <div style={{
+                        position: 'relative',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        border: '1.5px solid rgba(234, 179, 8, 0.5)',
+                        backgroundImage: `url(${WEAPON_LARGE_MISSILE_BG})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: 'inset 0 0 8px rgba(0,0,0,0.6)'
+                      }}>
+                        <img src={WEAPON_LARGE_MISSILE_ICON} alt="صاروخ كبير" referrerPolicy="no-referrer" style={{ width: '40px', height: '40px', objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.85))', position: 'relative', zIndex: 2 }} />
+                      </div>
                     </div>
                     <div style={{ textAlign: 'left', flex: 1, paddingRight: '12px' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fff' }}>صاروخ كبير</div>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: '#fef08a' }}>صاروخ كبير</div>
                       <div style={{ fontSize: '12px', color: '#facc15', fontWeight: 'bold' }}>ضرر 100,000 💥 (300,000 🪙)</div>
+                      <div style={{ fontSize: '11px', color: '#cbd5e1', lineHeight: '1.3', marginTop: '2px' }}>
+                        صاروخ فتاك يزلزل الدفاعات ويلحق 100,000 ضرر
+                      </div>
                     </div>
                   </div>
 
@@ -14753,9 +14556,9 @@ export default function App() {
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
-                  {/* 1. جاك سابرو */}
+                  {/* 1. تنين الأعماق */}
                   <div 
-                    onClick={() => handleLaunchAdBomb('jack_sabro')}
+                    onClick={() => handleLaunchAdBomb('deep_dragon')}
                     style={{
                       background: '#1e293b',
                       border: '1.5px solid #38bdf8',
@@ -14772,7 +14575,7 @@ export default function App() {
                     }}
                   >
                     <span style={{ fontSize: '24px' }}>🦎</span>
-                    <span>جاك سابرو</span>
+                    <span>تنين الأعماق</span>
                   </div>
 
                   {/* 2. لوفي ملك القراصنة */}

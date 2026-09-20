@@ -42,6 +42,10 @@ export interface FinancialTransactionParams {
   crew?: CrewMember[];
   /** Updated crew services modification */
   crewServices?: Record<string, any>;
+  /** Updated crew inventory stocks */
+  crewInventory?: Record<string, number>;
+  /** Updated shield inventory stocks */
+  shieldInventory?: Record<string, number>;
   /** Updated fish inventory */
   fishInventory?: Record<string, number>;
   /** Updated ship tower level */
@@ -173,6 +177,14 @@ export const executeFinancialTransaction = async (
 
         if (params.crewServices !== undefined) {
           updatePayload.crewServices = params.crewServices;
+        }
+
+        if (params.crewInventory !== undefined) {
+          updatePayload.crewInventory = params.crewInventory;
+        }
+
+        if (params.shieldInventory !== undefined) {
+          updatePayload.shieldInventory = params.shieldInventory;
         }
 
         // Atomic commit to Firestore

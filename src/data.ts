@@ -238,10 +238,15 @@ export const PIRATE_SHOP_BG = "/backgrounds/pirate_shop_bg.webp";
 export const WAREHOUSE_BG = "/backgrounds/warehouse_bg.webp";
 export const SHIP_BACKGROUND_IMAGE = "/backgrounds/ship_bg.webp";
 export const WEAPON_SMALL_MISSILE_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-missile-small.png";
+export const WEAPON_SMALL_MISSILE_BG = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/03_small_rocket_background_no_weapon.png";
 export const WEAPON_MEDIUM_MISSILE_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-missile-medium.png";
+export const WEAPON_MEDIUM_MISSILE_BG = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/04_medium_rocket_background_no_weapon.png";
 export const WEAPON_LARGE_MISSILE_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-missile-large.png";
+export const WEAPON_LARGE_MISSILE_BG = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/05_large_rocket_background_no_weapon.png";
 export const WEAPON_MEDIA_BOMB_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-media-bomb.png";
+export const WEAPON_MEDIA_BOMB_BG = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/01_explosive_chest_background_no_weapon.png";
 export const WEAPON_ATOMIC_BOMB_ICON = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/weapon-atomic-bomb.png";
+export const WEAPON_ATOMIC_BOMB_BG = "https://raw.githubusercontent.com/alwjyhnyazsrhan-blip/my-game-assets/refs/heads/main/02_sea_mine_background_no_weapon.png";
 
 export interface WeaponItemData {
   id: string;
@@ -252,6 +257,7 @@ export interface WeaponItemData {
   costType: 'gems' | 'gold';
   icon: string;
   image: string;
+  bgImage?: string;
   desc: string;
 }
 
@@ -265,6 +271,7 @@ export const WEAPONS_DATA: WeaponItemData[] = [
     costType: 'gems',
     icon: '📡',
     image: WEAPON_MEDIA_BOMB_ICON,
+    bgImage: WEAPON_MEDIA_BOMB_BG,
     desc: 'رسالة تفجيرية فتاكة تلحق 20,000 ضرر بأسطول العدو',
   },
   {
@@ -276,6 +283,7 @@ export const WEAPONS_DATA: WeaponItemData[] = [
     costType: 'gems',
     icon: '💣',
     image: WEAPON_ATOMIC_BOMB_ICON,
+    bgImage: WEAPON_ATOMIC_BOMB_BG,
     desc: 'قنبلة الموت الأسود الكاسحة تلحق 70,000 ضرر وتدمر الميناء بالكامل',
   },
   {
@@ -287,6 +295,7 @@ export const WEAPONS_DATA: WeaponItemData[] = [
     costType: 'gold',
     icon: '🚀',
     image: WEAPON_SMALL_MISSILE_ICON,
+    bgImage: WEAPON_SMALL_MISSILE_BG,
     desc: 'صاروخ صغير وسريع لتوجيه ضربة مباشرة تلحق 1,000 ضرر',
   },
   {
@@ -298,6 +307,7 @@ export const WEAPONS_DATA: WeaponItemData[] = [
     costType: 'gold',
     icon: '🚀',
     image: WEAPON_MEDIUM_MISSILE_ICON,
+    bgImage: WEAPON_MEDIUM_MISSILE_BG,
     desc: 'صاروخ متوسط القوة يخترق الدروع ويلحق 5,000 ضرر بهيكل السفينة',
   },
   {
@@ -309,6 +319,7 @@ export const WEAPONS_DATA: WeaponItemData[] = [
     costType: 'gold',
     icon: '🚀',
     image: WEAPON_LARGE_MISSILE_ICON,
+    bgImage: WEAPON_LARGE_MISSILE_BG,
     desc: 'صاروخ كبير فتاك يزلزل الدفاعات ويلحق 100,000 ضرر',
   },
 ];

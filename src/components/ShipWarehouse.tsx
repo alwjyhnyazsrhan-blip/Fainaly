@@ -162,6 +162,11 @@ export default function ShipWarehouse({
         cop: remainingAssigned.includes('cop') || remainingAssigned.includes('police'),
         police: remainingAssigned.includes('cop') || remainingAssigned.includes('police'),
         thief: remainingAssigned.includes('thief'),
+        market_expert: remainingAssigned.includes('market_expert'),
+        fixer_sm: remainingAssigned.includes('fixer_sm') || remainingAssigned.includes('repairer_small'),
+        fixer_md: remainingAssigned.includes('fixer_md') || remainingAssigned.includes('repairer_medium'),
+        fixer_lg: remainingAssigned.includes('fixer_lg') || remainingAssigned.includes('repairer_large'),
+        fixer_epic: remainingAssigned.includes('fixer_epic') || remainingAssigned.includes('repairer_legendary'),
       } : undefined;
 
       const res = await executeFinancialTransaction({

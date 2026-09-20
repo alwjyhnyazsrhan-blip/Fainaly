@@ -53,13 +53,24 @@ export const CrewTavernModal: React.FC<CrewTavernModalProps> = ({
     return currentShipId || existingShips[0]?.id || 's1';
   });
 
+  const normalizeCrewId = (crewId: string): string => {
+    if (crewId === 'police') return 'cop';
+    if (crewId === 'sailors') return 'sailor';
+    if (crewId === 'gold_fisher') return 'golden_hunter';
+    if (crewId === 'repairer_small' || crewId === 'smallRepair') return 'fixer_sm';
+    if (crewId === 'repairer_medium' || crewId === 'mediumRepair') return 'fixer_md';
+    if (crewId === 'repairer_large' || crewId === 'largeRepair') return 'fixer_lg';
+    if (crewId === 'repairer_legendary' || crewId === 'legendaryRepair') return 'fixer_epic';
+    return crewId;
+  };
+
   // Local fallback helpers for unassignment in case prop is not provided
   const handleUnassignSingle = (crewId: string, shipId: string) => {
     if (unassignCrewFromShip) {
       unassignCrewFromShip(crewId, shipId);
       return;
     }
-    const normKey = crewId === 'police' ? 'cop' : crewId === 'sailors' ? 'sailor' : crewId === 'gold_fisher' ? 'golden_hunter' : crewId;
+    const normKey = normalizeCrewId(crewId);
     if (setShips) {
       setShips(prev => {
         const updated = prev.map(s => {
@@ -84,7 +95,7 @@ export const CrewTavernModal: React.FC<CrewTavernModalProps> = ({
       unassignCrewFromAllShips(crewId);
       return;
     }
-    const normKey = crewId === 'police' ? 'cop' : crewId === 'sailors' ? 'sailor' : crewId === 'gold_fisher' ? 'golden_hunter' : crewId;
+    const normKey = normalizeCrewId(crewId);
     if (setShips) {
       setShips(prev => {
         const updated = prev.map(s => {
@@ -117,7 +128,7 @@ export const CrewTavernModal: React.FC<CrewTavernModalProps> = ({
       assignCrewToAllShips(crewId);
       return;
     }
-    const normKey = crewId === 'police' ? 'cop' : crewId === 'sailors' ? 'sailor' : crewId === 'gold_fisher' ? 'golden_hunter' : crewId;
+    const normKey = normalizeCrewId(crewId);
     if (setShips) {
       setShips(prev => {
         const updated = prev.map(s => {
@@ -198,18 +209,22 @@ export const CrewTavernModal: React.FC<CrewTavernModalProps> = ({
 
   const isAssignedToCurrentShip = (crewId: string): boolean => {
     if (!currentShip) return false;
-    const checkId = crewId === 'police' ? 'cop' : crewId === 'sailors' ? 'sailor' : crewId === 'gold_fisher' ? 'golden_hunter' : crewId;
-    return currentAssignedCrew.includes(checkId) || currentAssignedCrew.includes(crewId);
+    const checkId = normalizeCrewId(crewId);
+    const rawCrew = currentShip.assignedCrew || [];
+    return currentAssignedCrew.includes(checkId) || 
+           currentAssignedCrew.includes(crewId) || 
+           rawCrew.includes(checkId) || 
+           rawCrew.includes(crewId);
   };
 
   const isAssignedToAnyShip = (crewId: string): boolean => {
-    const checkId = crewId === 'police' ? 'cop' : crewId === 'sailors' ? 'sailor' : crewId === 'gold_fisher' ? 'golden_hunter' : crewId;
+    const checkId = normalizeCrewId(crewId);
     return existingShips.some(s => (s.assignedCrew || []).includes(checkId) || (s.assignedCrew || []).includes(crewId));
   };
 
   const isAssignedToAllShips = (crewId: string): boolean => {
     if (existingShips.length === 0) return false;
-    const checkId = crewId === 'police' ? 'cop' : crewId === 'sailors' ? 'sailor' : crewId === 'gold_fisher' ? 'golden_hunter' : crewId;
+    const checkId = normalizeCrewId(crewId);
     return existingShips.every(s => (s.assignedCrew || []).includes(checkId) || (s.assignedCrew || []).includes(crewId));
   };
 
@@ -954,7 +969,7 @@ export const CrewTavernModal: React.FC<CrewTavernModalProps> = ({
                         gap: '5px',
                       }}
                     >
-                      <span>{isFixer ? 'استخدام وإصلاح' : 'توظيف وتعيين للسفينة'}</span>
+                      <span>{isFixer ? 'توظيف وتعيين المصلح' : 'توظيف وتعيين للسفينة'}</span>
                       <span>{item.costType === 'gold' ? '🪙' : '💎'}</span>
                       <span>{item.costType === 'gold' ? item.price.toLocaleString() : item.price}</span>
                     </button>

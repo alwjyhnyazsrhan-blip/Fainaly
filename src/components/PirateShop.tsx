@@ -33,6 +33,28 @@ interface PirateShopProps {
   buyWeaponItem: (itemId: string, costType: 'gold' | 'blueGems', costValue: number) => void;
   buyCrewService: (key: string, name: string, price: number) => void;
   buyShopItem: (type: 'ship' | 'net' | 'engine' | 'gold_pack', costGold: number, costGems: number) => void;
+  crewInventory?: Record<string, number>;
+  setCrewInventory?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  shieldInventory?: Record<string, number>;
+  setShieldInventory?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  handlePurchase?: (params: {
+    category: 'weapon' | 'crew' | 'shield' | 'ship' | 'service' | 'item';
+    itemId: string;
+    itemName: string;
+    costType: 'gold' | 'gems' | 'blueGems';
+    price: number;
+    quantity?: number;
+    targetShipId?: string;
+  }) => Promise<boolean>;
+  buyItem?: (params: {
+    category: 'weapon' | 'crew' | 'shield' | 'ship' | 'service' | 'item';
+    itemId: string;
+    itemName: string;
+    costType: 'gold' | 'gems' | 'blueGems';
+    price: number;
+    quantity?: number;
+    targetShipId?: string;
+  }) => Promise<boolean>;
   confirmUpgradeShip?: (shipId: string, spec: any) => void;
   upgradeTargetSpec?: any;
   setUpgradeTargetSpec?: (spec: any) => void;
@@ -248,6 +270,12 @@ export default function PirateShop({
   buyWeaponItem,
   buyCrewService,
   buyShopItem,
+  crewInventory,
+  setCrewInventory,
+  shieldInventory,
+  setShieldInventory,
+  handlePurchase,
+  buyItem,
 }: PirateShopProps) {
   const [shopSubTab, setShopSubTab] = useState<
     'defense' | 'hamour' | 'crew_services' | 'vip' | 'backgrounds' | 'recharge'
@@ -859,11 +887,36 @@ export default function PirateShop({
 
                   <button
                     onClick={() => {
-                      if (gems >= item.price) {
-                        setGems(prev => prev - item.price);
-                        alert(`🛡️ تم شراء [${item.title}] وتفعيله بنجاح!`);
+                      if (handlePurchase) {
+                        handlePurchase({
+                          category: 'shield',
+                          itemId: item.key,
+                          itemName: item.title,
+                          costType: 'gems',
+                          price: item.price
+                        });
+                      } else if (buyItem) {
+                        buyItem({
+                          category: 'shield',
+                          itemId: item.key,
+                          itemName: item.title,
+                          costType: 'gems',
+                          price: item.price
+                        });
                       } else {
-                        alert(`❌ الجواهر غير كافية! تحتاج إلى ${item.price} 💎 جوهرة.`);
+                        if (gems >= item.price) {
+                          setGems(prev => prev - item.price);
+                          if (setShieldInventory) {
+                            setShieldInventory(prev => {
+                              const next = { ...prev, [item.key]: (prev[item.key] || 0) + 1 };
+                              try { localStorage.setItem('pirate_shield_inventory', JSON.stringify(next)); } catch (e) {}
+                              return next;
+                            });
+                          }
+                          alert(`🛡️ تم شراء [${item.title}] وإضافته للمخزن بنجاح!`);
+                        } else {
+                          alert(`❌ الجواهر غير كافية! تحتاج إلى ${item.price} 💎 جوهرة.`);
+                        }
                       }
                     }}
                     style={{
@@ -956,20 +1009,44 @@ export default function PirateShop({
                         alignItems: 'center',
                         justifyContent: 'center',
                         margin: '4px 0 8px 0',
-                        background: 'radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, rgba(20, 6, 2, 0.5) 100%)',
+                        background: item.bgImage
+                          ? `url(${item.bgImage}) center/cover no-repeat`
+                          : 'radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, rgba(20, 6, 2, 0.5) 100%)',
                         borderRadius: '12px',
                         border: '1px solid rgba(249, 115, 22, 0.3)',
+                        overflow: 'hidden',
+                        position: 'relative',
                       }}
                     >
+                      {item.bgImage && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            backgroundImage: `url(${item.bgImage})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            filter: 'brightness(0.9)',
+                            zIndex: 1,
+                          }}
+                        />
+                      )}
                       {item.image ? (
                         <img 
                           src={item.image} 
                           alt={item.name} 
                           referrerPolicy="no-referrer" 
-                          style={{ maxHeight: '82px', maxWidth: '82px', objectFit: 'contain', filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.7))' }} 
+                          style={{ 
+                            position: 'relative', 
+                            zIndex: 2, 
+                            maxHeight: '82px', 
+                            maxWidth: '82px', 
+                            objectFit: 'contain', 
+                            filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.8))' 
+                          }} 
                         />
                       ) : (
-                        <span style={{ fontSize: '46px' }}>{item.icon}</span>
+                        <span style={{ position: 'relative', zIndex: 2, fontSize: '46px' }}>{item.icon}</span>
                       )}
                     </div>
 
@@ -995,26 +1072,16 @@ export default function PirateShop({
 
                     <button
                       onClick={() => {
-                        if (buyWeaponItem) {
+                        if (handlePurchase) {
+                          handlePurchase({
+                            category: 'weapon',
+                            itemId: item.key,
+                            itemName: item.name,
+                            costType: item.costType === 'gold' ? 'gold' : 'blueGems',
+                            price: item.price
+                          });
+                        } else if (buyWeaponItem) {
                           buyWeaponItem(item.key, item.costType === 'gold' ? 'gold' : 'blueGems', item.price);
-                          return;
-                        }
-                        if (item.costType === 'gold') {
-                          if (gold >= item.price) {
-                            setGold(prev => prev - item.price);
-                            setWeapons(prev => ({ ...prev, [item.key]: (prev[item.key] || 0) + 1 }));
-                            alert(`🚀 تم شراء [${item.name}] بـ ${item.price.toLocaleString()} 🪙 ذهب!`);
-                          } else {
-                            alert(`❌ الذهب غير كافٍ! تحتاج إلى ${item.price.toLocaleString()} 🪙 ذهب.`);
-                          }
-                        } else {
-                          if (gems >= item.price) {
-                            setGems(prev => prev - item.price);
-                            setWeapons(prev => ({ ...prev, [item.key]: (prev[item.key] || 0) + 1 }));
-                            alert(`💥 تم شراء [${item.name}] بـ ${item.price} 💎 جوهرة!`);
-                          } else {
-                            alert(`❌ الجواهر غير كافية! تحتاج إلى ${item.price} 💎 جوهرة.`);
-                          }
                         }
                       }}
                       style={{
@@ -1062,7 +1129,19 @@ export default function PirateShop({
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', justifyContent: 'center', padding: '10px 0' }}>
-              {CREW_SHOP_ITEMS.map(item => (
+              {CREW_SHOP_ITEMS.map(item => {
+                const normId = item.id === 'police' ? 'cop' 
+                  : item.id === 'sailors' ? 'sailor' 
+                  : item.id === 'gold_fisher' ? 'golden_hunter' 
+                  : (item.id === 'repairer_small' || item.id === 'smallRepair') ? 'fixer_sm'
+                  : (item.id === 'repairer_medium' || item.id === 'mediumRepair') ? 'fixer_md'
+                  : (item.id === 'repairer_large' || item.id === 'largeRepair') ? 'fixer_lg'
+                  : (item.id === 'repairer_legendary' || item.id === 'legendaryRepair') ? 'fixer_epic'
+                  : item.id;
+                const assignedShip = ships.find(s => (s.assignedCrew || []).includes(normId) || (s.assignedCrew || []).includes(item.id));
+                const isAssigned = !!assignedShip;
+
+                return (
                 <div
                   key={item.id}
                   style={{
@@ -1071,8 +1150,8 @@ export default function PirateShop({
                     minWidth: '280px',
                     maxWidth: '280px',
                     borderRadius: '16px',
-                    border: '2px solid rgba(234, 179, 8, 0.75)',
-                    boxShadow: '0 12px 30px rgba(0,0,0,0.65), 0 0 16px rgba(234, 179, 8, 0.25)',
+                    border: isAssigned ? '2.5px solid #22c55e' : '2px solid rgba(234, 179, 8, 0.75)',
+                    boxShadow: isAssigned ? '0 0 18px rgba(34, 197, 94, 0.4)' : '0 12px 30px rgba(0,0,0,0.65), 0 0 16px rgba(234, 179, 8, 0.25)',
                     position: 'relative',
                     overflow: 'hidden',
                     background: '#0a1020',
@@ -1231,9 +1310,17 @@ export default function PirateShop({
 
                     <div
                       style={{
-                        background: item.costType === 'gold' ? 'rgba(234, 179, 8, 0.95)' : 'rgba(56, 189, 248, 0.95)',
-                        color: item.costType === 'gold' ? '#000000' : '#ffffff',
-                        border: item.costType === 'gold' ? '1px solid #fef08a' : '1px solid #7dd3fc',
+                        background: isAssigned
+                          ? 'rgba(22, 163, 74, 0.95)'
+                          : item.costType === 'gold'
+                            ? 'rgba(234, 179, 8, 0.95)'
+                            : 'rgba(56, 189, 248, 0.95)',
+                        color: isAssigned ? '#ffffff' : item.costType === 'gold' ? '#000000' : '#ffffff',
+                        border: isAssigned
+                          ? '1px solid #4ade80'
+                          : item.costType === 'gold'
+                            ? '1px solid #fef08a'
+                            : '1px solid #7dd3fc',
                         borderRadius: '8px',
                         fontSize: '11.5px',
                         fontWeight: 'bold',
@@ -1245,8 +1332,14 @@ export default function PirateShop({
                         gap: '3px',
                       }}
                     >
-                      <span>{item.costType === 'gold' ? '🪙' : '💎'}</span>
-                      <span>{item.costType === 'gold' ? item.price.toLocaleString() : item.price}</span>
+                      {isAssigned ? (
+                        <span>✔️ مُعيّن على {assignedShip?.name || 'السفينة'}</span>
+                      ) : (
+                        <>
+                          <span>{item.costType === 'gold' ? '🪙' : '💎'}</span>
+                          <span>{item.costType === 'gold' ? item.price.toLocaleString() : item.price}</span>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1333,55 +1426,73 @@ export default function PirateShop({
                       </div>
                     </div>
 
-                    {/* Buy Button */}
-                    <button
-                      onClick={() => {
-                        if (item.costType === 'gold') {
-                          if (gold >= item.price) {
-                            setGold(prev => prev - item.price);
+                    {/* Buy or Assigned Button */}
+                    {isAssigned ? (
+                      <div
+                        style={{
+                          width: '100%',
+                          background: 'rgba(22, 163, 74, 0.3)',
+                          color: '#4ade80',
+                          border: '1px solid #16a34a',
+                          borderRadius: '8px',
+                          padding: '8px 0',
+                          fontSize: '13px',
+                          fontWeight: '900',
+                          boxShadow: '0 0 12px rgba(34, 197, 94, 0.25)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span>✔️</span>
+                        <span>مُعيّن على {assignedShip?.name || 'السفينة'}</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (handlePurchase) {
+                            handlePurchase({
+                              category: 'crew',
+                              itemId: item.id,
+                              itemName: item.title,
+                              costType: item.costType === 'gold' ? 'gold' : 'gems',
+                              price: item.price
+                            });
+                          } else if (buyCrewService) {
                             buyCrewService(item.id, item.title, item.price);
-                            alert(`👥 تم توظيف [${item.title}] بنجاح!`);
-                          } else {
-                            alert(`❌ الذهب غير كافٍ! تحتاج إلى ${item.price.toLocaleString()} 🪙 ذهب.`);
                           }
-                        } else {
-                          if (gems >= item.price) {
-                            setGems(prev => prev - item.price);
-                            buyCrewService(item.id, item.title, item.price);
-                            alert(`👥 تم توظيف [${item.title}] بنجاح!`);
-                          } else {
-                            alert(`❌ الجواهر غير كافية! تحتاج إلى ${item.price} 💎 جوهرة.`);
-                          }
-                        }
-                      }}
-                      style={{
-                        width: '100%',
-                        background: item.costType === 'gold' 
-                          ? 'linear-gradient(to bottom, #f59e0b, #d97706)' 
-                          : 'linear-gradient(to bottom, #0284c7, #0369a1)',
-                        color: '#fff',
-                        border: item.costType === 'gold' ? '1px solid #fde68a' : '1px solid #bae6fd',
-                        borderRadius: '8px',
-                        padding: '8px 0',
-                        fontSize: '13px',
-                        fontWeight: '900',
-                        cursor: 'pointer',
-                        boxShadow: item.costType === 'gold' ? '0 4px 12px rgba(245, 158, 11, 0.4)' : '0 4px 12px rgba(2, 132, 199, 0.4)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      <span>توظيف</span>
-                      <span>|</span>
-                      <span>{item.costType === 'gold' ? `🪙 ${item.price.toLocaleString()}` : `💎 ${item.price}`}</span>
-                    </button>
+                        }}
+                        style={{
+                          width: '100%',
+                          background: item.costType === 'gold' 
+                            ? 'linear-gradient(to bottom, #f59e0b, #d97706)' 
+                            : 'linear-gradient(to bottom, #0284c7, #0369a1)',
+                          color: '#fff',
+                          border: item.costType === 'gold' ? '1px solid #fde68a' : '1px solid #bae6fd',
+                          borderRadius: '8px',
+                          padding: '8px 0',
+                          fontSize: '13px',
+                          fontWeight: '900',
+                          cursor: 'pointer',
+                          boxShadow: item.costType === 'gold' ? '0 4px 12px rgba(245, 158, 11, 0.4)' : '0 4px 12px rgba(2, 132, 199, 0.4)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <span>توظيف وتعيين</span>
+                        <span>|</span>
+                        <span>{item.costType === 'gold' ? `🪙 ${item.price.toLocaleString()}` : `💎 ${item.price}`}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
+          </div>
           </div>
         )}
 

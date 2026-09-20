@@ -10,6 +10,19 @@ interface InventoryComponentProps {
   setWeapons: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   crewServices: Record<string, boolean>;
   setCrewServices: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  crewInventory?: Record<string, number>;
+  setCrewInventory?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  shieldInventory?: Record<string, number>;
+  setShieldInventory?: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  handlePurchase?: (params: {
+    category: 'weapon' | 'crew' | 'shield' | 'ship' | 'service' | 'item';
+    itemId: string;
+    itemName: string;
+    costType: 'gold' | 'gems' | 'blueGems';
+    price: number;
+    quantity?: number;
+    targetShipId?: string;
+  }) => Promise<boolean>;
   onClose?: () => void;
 }
 
@@ -477,36 +490,59 @@ export default function InventoryComponent({
   setWeapons,
   crewServices,
   setCrewServices,
+  crewInventory: propCrewInventory,
+  setCrewInventory: propSetCrewInventory,
+  shieldInventory: propShieldInventory,
+  setShieldInventory: propSetShieldInventory,
+  handlePurchase,
   onClose,
 }: InventoryComponentProps) {
   const [activeTab, setActiveTab] = useState<'crew' | 'weapons' | 'shields' | 'items'>('crew');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Local inventory quantities for crew buffs & shields
-  const [crewInventory, setCrewInventory] = useState<Record<string, number>>({
-    guide: 1,
-    luck: 1,
-    sailor: 0,
-    thief: 1,
-    cop: 1,
-    merchant: 0,
-    fixer_sm: 0,
-    fixer_md: 0,
-    fixer_lg: 0,
-    fixer_epic: 0,
-    market_expert: 1,
-    gold_fisher: 1,
+  // Local inventory quantities fallback for crew buffs & shields
+  const [localCrewInventory, setLocalCrewInventory] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('pirate_crew_inventory');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      guide: 1,
+      luck: 1,
+      sailor: 0,
+      thief: 1,
+      cop: 1,
+      merchant: 0,
+      fixer_sm: 0,
+      fixer_md: 0,
+      fixer_lg: 0,
+      fixer_epic: 0,
+      market_expert: 1,
+      gold_fisher: 1,
+    };
   });
 
-  const [shieldInventory, setShieldInventory] = useState<Record<string, number>>({
-    shield_4h: 1,
-    shield_1d: 0,
-    shield_2d: 0,
-    anti_nuke: 0,
-    anti_emp: 0,
-    disable_anti_range: 0,
-    disable_anti_core: 0,
+  const [localShieldInventory, setLocalShieldInventory] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('pirate_shield_inventory');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      shield_4h: 1,
+      shield_1d: 0,
+      shield_2d: 0,
+      anti_nuke: 0,
+      anti_emp: 0,
+      disable_anti_range: 0,
+      disable_anti_core: 0,
+    };
   });
+
+  const crewInventory = propCrewInventory || localCrewInventory;
+  const setCrewInventory = propSetCrewInventory || setLocalCrewInventory;
+
+  const shieldInventory = propShieldInventory || localShieldInventory;
+  const setShieldInventory = propSetShieldInventory || setLocalShieldInventory;
 
   // Pokedex / Discovery Log state
   const [pokedexData, setPokedexData] = useState<PokedexFish[]>(() => {
@@ -546,61 +582,115 @@ export default function InventoryComponent({
   };
 
   const useCrewItem = (id: string, name: string) => {
-    const qty = crewInventory[id] || 0;
+    const qty = crewInventory[id] || (id === 'cop' ? crewInventory.police : 0) || (id === 'sailor' ? crewInventory.sailors : 0) || (id === 'gold_fisher' ? crewInventory.golden_hunter : 0) || (id === 'golden_hunter' ? crewInventory.gold_fisher : 0) || 0;
     if (qty <= 0) {
       showToast(`⚠️ لا تمتلك [${name}]! يمكن شراؤه من المتجر.`);
       return;
     }
-    setCrewInventory(prev => ({ ...prev, [id]: Math.max(0, prev[id] - 1) }));
-    setCrewServices(prev => ({ ...prev, [id]: true }));
-    showToast(`✅ تم استخدام [${name}] بنجاح وتفعيل خصائصه!`);
-  };
-
-  const buyOrUseWeapon = (id: string, name: string, price: number, costType: 'gold' | 'gems' = 'gold') => {
-    const currentQty = weapons[id] || (id === 'adBomb' ? weapons.adBomb : 0) || (id === 'atomicBomb' ? weapons.atomicBomb : 0) || (id === 'smallRocket' ? weapons.smallRocket : 0) || (id === 'mediumRocket' ? weapons.mediumRocket : 0) || (id === 'largeRocket' ? weapons.largeRocket : 0) || 0;
-    if (currentQty > 0) {
-      setWeapons(prev => ({
+    setCrewInventory(prev => {
+      const next = {
         ...prev,
         [id]: Math.max(0, (prev[id] || 0) - 1),
-        ...(id === 'adBomb' ? { emp_bomb: Math.max(0, (prev.emp_bomb || 0) - 1) } : {}),
-        ...(id === 'atomicBomb' ? { nuke_bomb: Math.max(0, (prev.nuke_bomb || 0) - 1) } : {}),
-        ...(id === 'smallRocket' ? { small_missile: Math.max(0, (prev.small_missile || 0) - 1) } : {}),
-        ...(id === 'mediumRocket' ? { medium_missile: Math.max(0, (prev.medium_missile || 0) - 1) } : {}),
-        ...(id === 'largeRocket' ? { large_missile: Math.max(0, (prev.large_missile || 0) - 1) } : {})
-      }));
+        ...(id === 'cop' ? { police: Math.max(0, (prev.police || prev.cop || 0) - 1) } : {}),
+        ...(id === 'police' ? { cop: Math.max(0, (prev.cop || prev.police || 0) - 1) } : {}),
+        ...(id === 'sailor' ? { sailors: Math.max(0, (prev.sailors || prev.sailor || 0) - 1) } : {}),
+        ...(id === 'sailors' ? { sailor: Math.max(0, (prev.sailor || prev.sailors || 0) - 1) } : {}),
+        ...(id === 'gold_fisher' ? { golden_hunter: Math.max(0, (prev.golden_hunter || prev.gold_fisher || 0) - 1) } : {}),
+        ...(id === 'golden_hunter' ? { gold_fisher: Math.max(0, (prev.gold_fisher || prev.golden_hunter || 0) - 1) } : {})
+      };
+      localStorage.setItem('pirate_crew_inventory', JSON.stringify(next));
+      return next;
+    });
+
+    setCrewServices(prev => {
+      const next = {
+        ...prev,
+        [id]: true,
+        ...(id === 'cop' ? { police: true } : {}),
+        ...(id === 'police' ? { cop: true } : {}),
+        ...(id === 'sailor' ? { sailors: true } : {}),
+        ...(id === 'sailors' ? { sailor: true } : {}),
+        ...(id === 'gold_fisher' ? { golden_hunter: true } : {}),
+        ...(id === 'golden_hunter' ? { gold_fisher: true } : {})
+      };
+      localStorage.setItem('pirate_crew_services', JSON.stringify(next));
+      return next;
+    });
+    showToast(`✅ تم استخدام [${name}] بنجاح وتفعيل خصائصه في أسطولك!`);
+  };
+
+  const buyOrUseWeapon = async (id: string, name: string, price: number, costType: 'gold' | 'gems' = 'gold') => {
+    const currentQty = weapons[id] || (id === 'adBomb' ? weapons.emp_bomb : 0) || (id === 'emp_bomb' ? weapons.adBomb : 0) || (id === 'atomicBomb' ? weapons.nuke_bomb : 0) || (id === 'nuke_bomb' ? weapons.atomicBomb : 0) || (id === 'smallRocket' ? weapons.small_missile : 0) || (id === 'small_missile' ? weapons.smallRocket : 0) || (id === 'mediumRocket' ? weapons.medium_missile : 0) || (id === 'medium_missile' ? weapons.mediumRocket : 0) || (id === 'largeRocket' ? weapons.large_missile : 0) || (id === 'large_missile' ? weapons.largeRocket : 0) || 0;
+    if (currentQty > 0) {
+      setWeapons(prev => {
+        const next = {
+          ...prev,
+          [id]: Math.max(0, (prev[id] || 0) - 1),
+          ...(id === 'adBomb' ? { emp_bomb: Math.max(0, (prev.emp_bomb || prev.adBomb || 0) - 1) } : {}),
+          ...(id === 'emp_bomb' ? { adBomb: Math.max(0, (prev.adBomb || prev.emp_bomb || 0) - 1) } : {}),
+          ...(id === 'atomicBomb' ? { nuke_bomb: Math.max(0, (prev.nuke_bomb || prev.atomicBomb || 0) - 1) } : {}),
+          ...(id === 'nuke_bomb' ? { atomicBomb: Math.max(0, (prev.atomicBomb || prev.nuke_bomb || 0) - 1) } : {}),
+          ...(id === 'smallRocket' ? { small_missile: Math.max(0, (prev.small_missile || prev.smallRocket || 0) - 1) } : {}),
+          ...(id === 'small_missile' ? { smallRocket: Math.max(0, (prev.smallRocket || prev.small_missile || 0) - 1) } : {}),
+          ...(id === 'mediumRocket' ? { medium_missile: Math.max(0, (prev.medium_missile || prev.mediumRocket || 0) - 1) } : {}),
+          ...(id === 'medium_missile' ? { mediumRocket: Math.max(0, (prev.mediumRocket || prev.medium_missile || 0) - 1) } : {}),
+          ...(id === 'largeRocket' ? { large_missile: Math.max(0, (prev.large_missile || prev.largeRocket || 0) - 1) } : {}),
+          ...(id === 'large_missile' ? { largeRocket: Math.max(0, (prev.largeRocket || prev.large_missile || 0) - 1) } : {})
+        };
+        localStorage.setItem('pirate_weapons', JSON.stringify(next));
+        return next;
+      });
       showToast(`🚀 تم إطلاق [${name}] على الأهداف بنجاح!`);
     } else {
-      if (costType === 'gems') {
-        if (gems >= price) {
-          setGems(prev => prev - price);
-          setWeapons(prev => ({
-            ...prev,
-            [id]: (prev[id] || 0) + 1,
-            ...(id === 'adBomb' ? { emp_bomb: (prev.emp_bomb || 0) + 1 } : {}),
-            ...(id === 'atomicBomb' ? { nuke_bomb: (prev.nuke_bomb || 0) + 1 } : {}),
-            ...(id === 'smallRocket' ? { small_missile: (prev.small_missile || 0) + 1 } : {}),
-            ...(id === 'mediumRocket' ? { medium_missile: (prev.medium_missile || 0) + 1 } : {}),
-            ...(id === 'largeRocket' ? { large_missile: (prev.large_missile || 0) + 1 } : {})
-          }));
-          showToast(`💎 تم شراء [${name}] بمبلغ ${price} جوهرة!`);
-        } else {
-          showToast(`❌ الجواهر غير كافية! تحتاج إلى ${price} 💎 جوهرة.`);
-        }
+      if (handlePurchase) {
+        await handlePurchase({
+          category: 'weapon',
+          itemId: id,
+          itemName: name,
+          costType: costType === 'gold' ? 'gold' : 'gems',
+          price
+        });
       } else {
-        if (gold >= price) {
-          setGold(prev => prev - price);
-          setWeapons(prev => ({
-            ...prev,
-            [id]: (prev[id] || 0) + 1,
-            ...(id === 'adBomb' ? { emp_bomb: (prev.emp_bomb || 0) + 1 } : {}),
-            ...(id === 'atomicBomb' ? { nuke_bomb: (prev.nuke_bomb || 0) + 1 } : {}),
-            ...(id === 'smallRocket' ? { small_missile: (prev.small_missile || 0) + 1 } : {}),
-            ...(id === 'mediumRocket' ? { medium_missile: (prev.medium_missile || 0) + 1 } : {}),
-            ...(id === 'largeRocket' ? { large_missile: (prev.large_missile || 0) + 1 } : {})
-          }));
-          showToast(`🪙 تم شراء [${name}] بمبلغ ${price.toLocaleString()} ذهب!`);
+        if (costType === 'gems') {
+          if (gems >= price) {
+            setGems(prev => prev - price);
+            setWeapons(prev => {
+              const next = {
+                ...prev,
+                [id]: (prev[id] || 0) + 1,
+                ...(id === 'adBomb' ? { emp_bomb: (prev.emp_bomb || 0) + 1 } : {}),
+                ...(id === 'atomicBomb' ? { nuke_bomb: (prev.nuke_bomb || 0) + 1 } : {}),
+                ...(id === 'smallRocket' ? { small_missile: (prev.small_missile || 0) + 1 } : {}),
+                ...(id === 'mediumRocket' ? { medium_missile: (prev.medium_missile || 0) + 1 } : {}),
+                ...(id === 'largeRocket' ? { large_missile: (prev.large_missile || 0) + 1 } : {})
+              };
+              localStorage.setItem('pirate_weapons', JSON.stringify(next));
+              return next;
+            });
+            showToast(`💎 تم شراء [${name}] بمبلغ ${price} جوهرة!`);
+          } else {
+            showToast(`❌ الجواهر غير كافية! تحتاج إلى ${price} 💎 جوهرة.`);
+          }
         } else {
-          showToast(`❌ الذهب غير كافٍ! تحتاج إلى ${price.toLocaleString()} 🪙 ذهب.`);
+          if (gold >= price) {
+            setGold(prev => prev - price);
+            setWeapons(prev => {
+              const next = {
+                ...prev,
+                [id]: (prev[id] || 0) + 1,
+                ...(id === 'adBomb' ? { emp_bomb: (prev.emp_bomb || 0) + 1 } : {}),
+                ...(id === 'atomicBomb' ? { nuke_bomb: (prev.nuke_bomb || 0) + 1 } : {}),
+                ...(id === 'smallRocket' ? { small_missile: (prev.small_missile || 0) + 1 } : {}),
+                ...(id === 'mediumRocket' ? { medium_missile: (prev.medium_missile || 0) + 1 } : {}),
+                ...(id === 'largeRocket' ? { large_missile: (prev.large_missile || 0) + 1 } : {})
+              };
+              localStorage.setItem('pirate_weapons', JSON.stringify(next));
+              return next;
+            });
+            showToast(`🪙 تم شراء [${name}] بمبلغ ${price.toLocaleString()} ذهب!`);
+          } else {
+            showToast(`❌ الذهب غير كافٍ! تحتاج إلى ${price.toLocaleString()} 🪙 ذهب.`);
+          }
         }
       }
     }
@@ -612,7 +702,11 @@ export default function InventoryComponent({
       showToast(`⚠️ لا تمتلك [${name}]! يمكنك شراؤه من متجر الحصون.`);
       return;
     }
-    setShieldInventory(prev => ({ ...prev, [id]: Math.max(0, prev[id] - 1) }));
+    setShieldInventory(prev => {
+      const next = { ...prev, [id]: Math.max(0, (prev[id] || 0) - 1) };
+      localStorage.setItem('pirate_shield_inventory', JSON.stringify(next));
+      return next;
+    });
     showToast(`🛡️ تم تفعيل درع الحماية [${name}] وتأمينه على مينائك!`);
   };
 
@@ -936,7 +1030,7 @@ export default function InventoryComponent({
                 icon: '🍀',
                 image: LUCK_PIRATE_ICON,
                 bgImage: LUCK_PIRATE_BG,
-                qty: crewInventory['luck'] || 1,
+                qty: crewInventory['luck'] || 0,
                 btnText: 'استخدام',
               },
               {
@@ -946,7 +1040,7 @@ export default function InventoryComponent({
                 icon: '⚓',
                 image: SAILOR_ICON,
                 bgImage: SAILOR_BG,
-                qty: crewInventory['sailor'] || 0,
+                qty: crewInventory['sailor'] || crewInventory['sailors'] || 0,
                 btnText: 'استخدام',
               },
               {
@@ -956,7 +1050,7 @@ export default function InventoryComponent({
                 icon: '🥷',
                 image: SHIP_THIEF_ICON,
                 bgImage: SHIP_THIEF_BG,
-                qty: crewInventory['thief'] || 1,
+                qty: crewInventory['thief'] || 0,
                 btnText: 'استخدام',
               },
               {
@@ -966,7 +1060,7 @@ export default function InventoryComponent({
                 icon: '👮‍♂️',
                 image: SHIP_GUARDIAN_ICON,
                 bgImage: SHIP_GUARDIAN_BG,
-                qty: crewInventory['cop'] || 1,
+                qty: crewInventory['cop'] || crewInventory['police'] || 0,
                 btnText: 'استخدام',
               },
               {
@@ -1016,7 +1110,7 @@ export default function InventoryComponent({
                 icon: '📈',
                 image: MARKET_EXPERT_ICON,
                 bgImage: MARKET_EXPERT_BG,
-                qty: crewInventory['market_expert'] || 1,
+                qty: crewInventory['market_expert'] || 0,
                 btnText: 'تفعيل',
               },
               {
@@ -1026,7 +1120,7 @@ export default function InventoryComponent({
                 icon: '🪙',
                 image: GOLDEN_HUNTER_ICON,
                 bgImage: GOLDEN_HUNTER_BG,
-                qty: crewInventory['gold_fisher'] || 1,
+                qty: crewInventory['gold_fisher'] || crewInventory['golden_hunter'] || 0,
                 btnText: 'تفعيل',
               },
             ].map(item => (
@@ -1374,7 +1468,9 @@ export default function InventoryComponent({
                       width: '100%',
                       height: '115px',
                       borderRadius: '12px',
-                      background: 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(10,20,44,0.8) 100%)',
+                      background: item.bgImage 
+                        ? `url(${item.bgImage}) center/cover no-repeat` 
+                        : 'radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(10,20,44,0.8) 100%)',
                       border: '1.5px solid rgba(234, 179, 8, 0.5)',
                       display: 'flex',
                       alignItems: 'center',
@@ -1382,18 +1478,41 @@ export default function InventoryComponent({
                       fontSize: '48px',
                       margin: '8px 0 10px 0',
                       overflow: 'hidden',
+                      position: 'relative',
                       boxShadow: 'inset 0 0 15px rgba(0,0,0,0.6)',
                     }}
                   >
+                    {item.bgImage && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          backgroundImage: `url(${item.bgImage})`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                          filter: 'brightness(0.95)',
+                          zIndex: 1,
+                        }}
+                      />
+                    )}
                     {item.image ? (
                       <img 
                         src={item.image} 
                         alt={item.name} 
                         referrerPolicy="no-referrer" 
-                        style={{ maxHeight: '95px', maxWidth: '95px', width: 'auto', height: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.8))' }} 
+                        style={{ 
+                          position: 'relative', 
+                          zIndex: 2, 
+                          maxHeight: '95px', 
+                          maxWidth: '95px', 
+                          width: 'auto', 
+                          height: 'auto', 
+                          objectFit: 'contain', 
+                          filter: 'drop-shadow(0 6px 14px rgba(0,0,0,0.85))' 
+                        }} 
                       />
                     ) : (
-                      <span>{item.icon}</span>
+                      <span style={{ position: 'relative', zIndex: 2 }}>{item.icon}</span>
                     )}
                   </div>
 
@@ -1483,7 +1602,7 @@ export default function InventoryComponent({
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 mb-6">
               {[
-                { id: 'shield_4h', title: 'درع 4 ساعات', desc: 'حماية لمدة 4 ساعات', icon: '🛡️', qty: shieldInventory['shield_4h'] || 1 },
+                { id: 'shield_4h', title: 'درع 4 ساعات', desc: 'حماية لمدة 4 ساعات', icon: '🛡️', qty: shieldInventory['shield_4h'] || 0 },
                 { id: 'shield_1d', title: 'درع يوم', desc: 'حماية لمدة 24 ساعة', icon: '🛡️', qty: shieldInventory['shield_1d'] || 0 },
                 { id: 'shield_2d', title: 'درع يومين', desc: 'حماية لمدة 48 ساعة', icon: '🛡️', qty: shieldInventory['shield_2d'] || 0 },
               ].map(item => (

@@ -22,12 +22,33 @@ export interface CrewVisualInfo {
   badgeBorder: string;
 }
 
-export const VALID_CREW_KEYS = ['luck', 'sailor', 'cop', 'guide', 'thief', 'golden_hunter', 'market_expert'];
+export const VALID_CREW_KEYS = [
+  'luck',
+  'sailor',
+  'cop',
+  'guide',
+  'thief',
+  'golden_hunter',
+  'market_expert',
+  'fixer_sm',
+  'fixer_md',
+  'fixer_lg',
+  'fixer_epic'
+];
 
 export const sanitizeShipCrew = (crewList?: string[]): string[] => {
   if (!Array.isArray(crewList)) return [];
   const normalized = crewList
-    .map(k => (k === 'police' ? 'cop' : k === 'sailors' ? 'sailor' : k === 'gold_fisher' ? 'golden_hunter' : k))
+    .map(k => {
+      if (k === 'police') return 'cop';
+      if (k === 'sailors') return 'sailor';
+      if (k === 'gold_fisher') return 'golden_hunter';
+      if (k === 'repairer_small' || k === 'smallRepair') return 'fixer_sm';
+      if (k === 'repairer_medium' || k === 'mediumRepair') return 'fixer_md';
+      if (k === 'repairer_large' || k === 'largeRepair') return 'fixer_lg';
+      if (k === 'repairer_legendary' || k === 'legendaryRepair') return 'fixer_epic';
+      return k;
+    })
     .filter(k => VALID_CREW_KEYS.includes(k));
   return Array.from(new Set(normalized));
 };
@@ -138,6 +159,38 @@ export const CREW_VISUAL_MAP: Record<string, CrewVisualInfo> = {
     badgeBorder: '#cbd5e1'
   },
   fixer_epic: {
+    id: 'fixer_epic',
+    name: 'مصلح أسطوري',
+    image: FIXER_LEGENDARY_ICON,
+    badgeIcon: '👑',
+    badgeBg: 'radial-gradient(circle, #ca8a04 0%, #78350f 100%)',
+    badgeBorder: '#fde047'
+  },
+  repairer_small: {
+    id: 'fixer_sm',
+    name: 'مصلح صغير',
+    image: FIXER_SMALL_ICON,
+    badgeIcon: '🛠️',
+    badgeBg: 'radial-gradient(circle, #475569 0%, #0f172a 100%)',
+    badgeBorder: '#cbd5e1'
+  },
+  repairer_medium: {
+    id: 'fixer_md',
+    name: 'مصلح وسط',
+    image: FIXER_MEDIUM_ICON,
+    badgeIcon: '🔨',
+    badgeBg: 'radial-gradient(circle, #475569 0%, #0f172a 100%)',
+    badgeBorder: '#cbd5e1'
+  },
+  repairer_large: {
+    id: 'fixer_lg',
+    name: 'مصلح كبير',
+    image: FIXER_LARGE_ICON,
+    badgeIcon: '⚙️',
+    badgeBg: 'radial-gradient(circle, #475569 0%, #0f172a 100%)',
+    badgeBorder: '#cbd5e1'
+  },
+  repairer_legendary: {
     id: 'fixer_epic',
     name: 'مصلح أسطوري',
     image: FIXER_LEGENDARY_ICON,
