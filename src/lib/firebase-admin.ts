@@ -35,7 +35,7 @@ export function getAdminDb(): Firestore {
     const dbId = firebaseAppletConfig.firestoreDatabaseId && firebaseAppletConfig.firestoreDatabaseId !== '(default)' 
       ? firebaseAppletConfig.firestoreDatabaseId 
       : undefined;
-    adminDbInstance = getFirestore(getAdminApp(), dbId);
+    adminDbInstance = dbId ? getFirestore(getAdminApp(), dbId) : getFirestore(getAdminApp());
   }
   return adminDbInstance;
 }

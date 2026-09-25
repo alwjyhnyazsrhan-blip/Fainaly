@@ -28,10 +28,12 @@ import {
   playAtomicBombExplosionSound,
   playMediaBombExplosionSound
 } from './utils/explosionSound';
+import { playDetonationWarningVoiceAndSound } from './utils/warningDetonationSound';
 
 import ShipImage from './components/ShipImage';
 import ShipCrewMember, { CREW_VISUAL_MAP, sanitizeShipCrew } from './components/ShipCrewMember';
 import { SettingsView } from './components/SettingsView';
+import { LeaderboardView } from './components/LeaderboardView';
 // @ts-ignore
 import destroyedPortImg from './assets/images/destroyed_port_1784900250438.jpg';
 
@@ -883,23 +885,29 @@ export default function App() {
 
   // Audio notification playback using imported synthesizer
   const triggerNotificationSound = (type: NotificationEventType) => {
-    playNotificationSound(type, isMuted || isSfxMuted);
+    try {
+      playNotificationSound(type, isMuted || isSfxMuted);
+    } catch (e) {
+      console.debug('Notification sound playback notice:', e);
+    }
   };
+
+  // Queue listener effect: when currentNotification is null and queue has items, advance queue cleanly outside render
+  useEffect(() => {
+    if (!currentNotification && notificationQueue.length > 0) {
+      const next = notificationQueue[0];
+      setNotificationQueue(prev => prev.slice(1));
+      setCurrentNotification(next);
+      triggerNotificationSound(next.type);
+    }
+  }, [currentNotification, notificationQueue]);
 
   const queueNotification = (notif: GlobalNotification) => {
     const key = notif.id || `${notif.type}_${notif.title}_${notif.message}`;
     if (displayedNotifIds.current.has(key)) return;
     displayedNotifIds.current.add(key);
 
-    setCurrentNotification(prev => {
-      if (!prev) {
-        triggerNotificationSound(notif.type);
-        return notif;
-      } else {
-        setNotificationQueue(q => [...q, notif]);
-        return prev;
-      }
-    });
+    setNotificationQueue(prev => [...prev, notif]);
   };
 
   const showInGameBanner = (notif: GlobalNotification) => {
@@ -907,17 +915,7 @@ export default function App() {
   };
 
   const handleDismissNotification = () => {
-    setNotificationQueue(prev => {
-      if (prev.length > 0) {
-        const next = prev[0];
-        setCurrentNotification(next);
-        triggerNotificationSound(next.type);
-        return prev.slice(1);
-      } else {
-        setCurrentNotification(null);
-        return [];
-      }
-    });
+    setCurrentNotification(null);
   };
 
   const handleToggleNotifSound = () => {
@@ -1831,13 +1829,6 @@ export default function App() {
     setIsShaking(true);
     playMediaBombExplosionSound();
 
-    // Play corresponding synthesized sound
-    if (selectedAdKey === 'luffy_king') {
-      playLuffyAdSound();
-    } else {
-      playAdPoemSound();
-    }
-
     // Get Ad Title Arabic
     let adTitle = '';
     if (selectedAdKey === 'luffy_king') adTitle = '☠️ لوفي ملك القراصنة';
@@ -1848,6 +1839,9 @@ export default function App() {
     setTimeout(async () => {
       setShowSmokeExplosion(false);
       setIsShaking(false);
+
+      // تشغيل الصوت الملحمي المطلوب بعد ما يتم التفجير برسالة التفجير مباشرة
+      playDetonationWarningVoiceAndSound();
 
       const targetDocId = inspectedPlayer.userId || inspectedPlayer.id;
       if (targetDocId && db) {
@@ -3872,6 +3866,13 @@ export default function App() {
                 createdAt: new Date().toISOString()
               });
               showToast(`🚨 قصف معادٍ! هاجم القبطان @${attackerName} ميناءك وسفنك!`, 'error');
+
+              if (ev.type === 'AD_BOMB') {
+                playMediaBombExplosionSound();
+                setTimeout(() => {
+                  playDetonationWarningVoiceAndSound();
+                }, 1800);
+              }
             } else if (ev.type === 'STEAL') {
               const stolenAmount = ev.payload?.amount || 0;
               const attackerName = ev.attackerName || 'لص';
@@ -7857,13 +7858,7 @@ export default function App() {
         }
       `}</style>
 
-      {/* Global Real-time In-Game Floating Notification / Toast Banner */}
-      <InGameNotificationBanner
-        notification={currentNotification}
-        onDismiss={handleDismissNotification}
-        isSoundEnabled={!isMuted && !isSfxMuted}
-        onToggleSound={handleToggleNotifSound}
-      />
+
 
       {/* ----------------- GAME BACKGROUND AND HARBOR VIEW ----------------- */}
       <div id="harbor-viewport">
@@ -10326,835 +10321,178 @@ export default function App() {
         </div>
       )}
 
-      {/* ----------------- LEADERBOARD TAB (لوحة الترتيب والمتصدرين) ----------------- */}
-      {activeTab === 'leaderboard' && (() => {
-        // 1. Calculate sorting and filtering
-        const getSortedAndFilteredPlayers = () => {
-          let list = [...realPlayers];
-          
-          // Apply search filter if search mode is selected
-          if (leaderboardFilter === 'search' && leaderboardSearchQuery) {
-            list = list.filter(p => 
-              p.username && p.username.toLowerCase().includes(leaderboardSearchQuery.toLowerCase())
-            );
-          }
-          
-          // Sort players based on selected filter
-          if (leaderboardFilter === 'fish') {
-            list.sort((a, b) => {
-              const fishA = Object.values(a.fishInventory || {}).reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0) as number;
-              const fishB = Object.values(b.fishInventory || {}).reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0) as number;
-              const goldA = (a.gold || 0) as number;
-              const goldB = (b.gold || 0) as number;
-              return (fishB - fishA) || (goldB - goldA);
-            });
-          } else if (leaderboardFilter === 'gold') {
-            list.sort((a, b) => b.gold - a.gold);
-          } else if (leaderboardFilter === 'gems') {
-            list.sort((a, b) => b.gems - a.gems);
-          } else if (leaderboardFilter === 'xp') {
-            list.sort((a, b) => b.exp - a.exp);
-          } else {
-            // Default sorting for other screens (e.g. search, tribes, events, donate)
-            list.sort((a, b) => b.gold - a.gold);
-          }
-          return list;
-        };
+            {/* ----------------- LEADERBOARD TAB (لوحة الترتيب والمتصدرين - ملوك الأعماق) ----------------- */}
+      {activeTab === 'leaderboard' && (
+        <>
+          <LeaderboardView
+            realPlayers={realPlayers}
+            currentUser={currentUser}
+            currentGold={gold}
+            currentGems={gems}
+            leaderboardFilter={leaderboardFilter}
+            setLeaderboardFilter={setLeaderboardFilter}
+            leaderboardSearchQuery={leaderboardSearchQuery}
+            setLeaderboardSearchQuery={setLeaderboardSearchQuery}
+            handleOpenProfile={handleOpenProfile}
+            handleCopyGameLink={handleCopyGameLink}
+            setActiveTab={setActiveTab}
+          />
 
-        const sortedList = getSortedAndFilteredPlayers();
-        const p1 = sortedList[0] || null;
-        const p2 = sortedList[1] || null;
-        const p3 = sortedList[2] || null;
-        const remainder = sortedList.slice(3);
-
-        const getPlayerStats = (player: any) => {
-          if (!player) return { totalStr: '0', typesStr: '0 نوع' };
-          
-          const totalFish = Object.values(player.fishInventory || {}).reduce((sum: number, val: any) => sum + (typeof val === 'number' ? val : 0), 0);
-          const activeTypes = Object.keys(player.fishInventory || {}).filter(k => (player.fishInventory[k] || 0) > 0).length;
-          // Fallback to beautiful proxy values based on exp if starting fresh so it looks full but strictly non-fictional
-          const displayTypes = activeTypes > 0 ? activeTypes : Math.min(48, Math.max(1, Math.floor(player.exp / 120) + 1));
-          
-          if (leaderboardFilter === 'fish') {
-            return {
-              totalStr: `إجمالي ${totalFish.toLocaleString()} سمكة`,
-              typesStr: `${displayTypes} نوع`
-            };
-          } else if (leaderboardFilter === 'gold') {
-            return {
-              totalStr: `${player.gold.toLocaleString()} ذهب`,
-              typesStr: `${displayTypes} نوع`
-            };
-          } else if (leaderboardFilter === 'gems') {
-            return {
-              totalStr: `${player.gems.toLocaleString()} جواهر`,
-              typesStr: `${displayTypes} types`
-            };
-          } else if (leaderboardFilter === 'xp') {
-            return {
-              totalStr: `${player.exp.toLocaleString()} XP`,
-              typesStr: `المستوى ${Math.floor(Math.sqrt(player.exp / 100)) + 1}`
-            };
-          } else {
-            return {
-              totalStr: `💰 ${player.gold.toLocaleString()}`,
-              typesStr: `${displayTypes} نوع`
-            };
-          }
-        };
-
-        return (
-          <div className="tab-overlay" style={{
-            background: 'linear-gradient(to bottom, #0f0a06 0%, #17100b 50%, #0c0805 100%)',
-            border: '2px solid #ca8a04',
-            borderRadius: '16px',
-            color: '#fff',
-            direction: 'rtl',
-            padding: '16px',
-            maxWidth: '1080px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(202,138,4,0.1)'
-          }}>
-            
-            {/* Top Subtitle & Main Title */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '14px' }}>
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.12)',
-                border: '1px solid #ef4444',
-                borderRadius: '999px',
-                padding: '3px 14px',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                color: '#fca5a5',
-                marginBottom: '8px',
-                boxShadow: '0 0 6px rgba(239,68,68,0.3)',
-                letterSpacing: '0.5px'
-              }}>
-                💥 آخر 5 هجمات
-              </div>
-              <h2 style={{
-                fontSize: '28px',
-                fontWeight: '900',
-                color: '#fef08a',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                textShadow: '0 2px 4px rgba(0,0,0,0.5)',
-                margin: 0
-              }}>
-                ⚓ الترتيب ⚓
-              </h2>
-            </div>
-
-            {/* Share & Invite Multiplayer Banner */}
+          {/* Real Donation Modal Popup */}
+          {donationTargetPlayer && (
             <div style={{
-              background: 'linear-gradient(90deg, rgba(202, 138, 4, 0.2) 0%, rgba(22, 163, 74, 0.2) 100%)',
-              border: '1.5px solid #ca8a04',
-              borderRadius: '12px',
-              padding: '10px 14px',
-              marginBottom: '14px',
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.85)',
               display: 'flex',
-              justifyContent: 'space-between',
               alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '10px'
+              justifyContent: 'center',
+              zIndex: 999,
+              direction: 'rtl',
+              padding: '16px'
             }}>
-              <div style={{ fontSize: '12px', color: '#fef08a' }}>
-                <span style={{ fontWeight: 'bold' }}>📢 دعوة أصدقائك للعب المباشر (Multiplayer):</span> شارك رابط اللعبة مع أصدقائك في أي دولة ليدخلوا فوراً ويلتقوا بك في الشات والتحالفات!
-              </div>
-              <button 
-                onClick={handleCopyGameLink}
-                style={{
-                  background: 'linear-gradient(180deg, #ca8a04 0%, #a16207 100%)',
-                  color: '#000',
-                  border: '1px solid #fef08a',
-                  padding: '6px 14px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  flexShrink: 0
-                }}>
-                نسخ رابط اللعبة والمشاركة 🔗
-              </button>
-            </div>
+              <div style={{
+                background: 'linear-gradient(to bottom, #1c130c, #0f0a06)',
+                border: '2px solid #ca8a04',
+                borderRadius: '14px',
+                width: '100%',
+                maxWidth: '400px',
+                padding: '20px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.8)'
+              }}>
+                <h3 style={{ margin: '0 0 12px 0', color: '#facc15', fontSize: '18px', textAlign: 'center' }}>
+                  🪙 إرسال دعم ذهبي للقبطان
+                </h3>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#130d09', padding: '10px', borderRadius: '10px', border: '1px solid #3c2919', marginBottom: '16px' }}>
+                  <span style={{ fontSize: '32px' }}>{donationTargetPlayer.avatar || '⚓'}</span>
+                  <div>
+                    <div style={{ fontWeight: 'bold', color: '#fff' }}>@{donationTargetPlayer.username}</div>
+                    <div style={{ fontSize: '11px', color: '#a8a29e' }}>رصيده الحالي: 🪙 {(donationTargetPlayer.gold || 0).toLocaleString()} ذهبة</div>
+                  </div>
+                </div>
 
-            {/* Sub-tab Navigation (9 buttons matching image) */}
-            <div style={{
-              display: 'flex',
-              gap: '6px',
-              overflowX: 'auto',
-              paddingBottom: '10px',
-              marginBottom: '16px',
-              scrollbarWidth: 'none',
-            }} className="no-scrollbar">
-              {[
-                { id: 'search', label: 'بحث', icon: '🔍' },
-                { id: 'donate', label: 'تبرع', icon: '🪙' },
-                { id: 'tribes', label: 'قبائل', icon: '🏴‍☠️' },
-                { id: 'shop', label: 'سوق', icon: '🏪' },
-                { id: 'fish', label: 'صيد', icon: '🐟' },
-                { id: 'gold', label: 'ذهب', icon: '🟡' },
-                { id: 'gems', label: 'جواهر', icon: '💎' },
-                { id: 'xp', label: 'XP', icon: '⭐' },
-                { id: 'events', label: 'فعاليات', icon: '🏆' },
-              ].map(tab => {
-                const isActive = leaderboardFilter === tab.id;
-                return (
-                  <div
-                    key={tab.id}
-                    onClick={() => {
-                      if (tab.id === 'shop') {
-                        setActiveTab('shop');
-                      } else if (tab.id === 'tribes') {
-                        setActiveTab('tribes');
-                      } else {
-                        setLeaderboardFilter(tab.id as any);
+                <div style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '12px' }}>
+                  رصيدك الحالي المتاح للإرسال: <span style={{ color: '#22c55e', fontWeight: 'bold' }}>🪙 {gold.toLocaleString()} ذهبة</span>
+                </div>
+
+                <label style={{ display: 'block', fontSize: '12px', color: '#fef08a', marginBottom: '6px' }}>حدد مبلغ الدعم الذهبي:</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '14px' }}>
+                  {[500, 2500, 10000, 50000].map(amt => (
+                    <button
+                      key={amt}
+                      onClick={() => setDonationAmount(amt)}
+                      style={{
+                        background: donationAmount === amt ? '#ca8a04' : '#130d09',
+                        color: donationAmount === amt ? '#000' : '#facc15',
+                        border: '1px solid #ca8a04',
+                        borderRadius: '6px',
+                        padding: '6px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {amt >= 1000 ? `${amt / 1000}K` : amt}
+                    </button>
+                  ))}
+                </div>
+
+                <input 
+                  type="number"
+                  min="1"
+                  max={gold}
+                  value={donationAmount}
+                  onChange={(e) => setDonationAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={{
+                    width: '100%',
+                    background: '#130d09',
+                    border: '1.5px solid #3c2919',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    outline: 'none',
+                    textAlign: 'center',
+                    marginBottom: '16px'
+                  }}
+                />
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={async () => {
+                      if (donationAmount <= 0) {
+                        alert("الرجاء تحديد مبلغ دعم صحيح!");
+                        return;
+                      }
+                      if (gold < donationAmount) {
+                        alert("⚠️ رصيدك من الذهب لا يكفي لإتمام عملية التبرع!");
+                        return;
+                      }
+                      if (donationTargetPlayer.userId === auth.currentUser?.uid) {
+                        alert("⚠️ لا يمكنك إرسال ذهب لنفسك!");
+                        return;
+                      }
+
+                      try {
+                        const targetRef = doc(db, 'users', donationTargetPlayer.id || donationTargetPlayer.userId);
+                        const senderRef = doc(db, 'users', auth.currentUser!.uid);
+
+                        await updateDoc(targetRef, {
+                          gold: (donationTargetPlayer.gold || 0) + donationAmount
+                        });
+
+                        await updateDoc(senderRef, {
+                          gold: gold - donationAmount
+                        });
+
+                        setGold(prev => prev - donationAmount);
+                        showToast(`🪙 تم إرسال ${donationAmount.toLocaleString()} ذهب بنجاح إلى القبطان @${donationTargetPlayer.username}!`, 'success');
+                        setDonationTargetPlayer(null);
+                      } catch (err: any) {
+                        console.error("Error doing donation transfer: ", err);
+                        showToast("فشلت عملية التبرع: " + (err.message || 'خطأ في الاتصال'), 'error');
                       }
                     }}
                     style={{
-                      width: '82px',
-                      height: '82px',
-                      flexShrink: 0,
-                      background: isActive ? 'radial-gradient(circle, #5c2c06 0%, #1e1208 100%)' : '#17110c',
-                      border: isActive ? '2px solid #ca8a04' : '1px solid #3c2919',
-                      borderRadius: '14px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                      flex: 1,
+                      background: 'linear-gradient(to bottom, #10b981, #047857)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      fontWeight: 'bold',
                       cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      boxShadow: isActive ? '0 0 12px rgba(202,138,4,0.45)' : 'none',
+                      fontSize: '13px'
                     }}
                   >
-                    <span style={{ fontSize: '26px', marginBottom: '4px' }}>{tab.icon}</span>
-                    <span style={{ fontSize: '13px', color: isActive ? '#facc15' : '#a8a29e', fontWeight: '900', textShadow: '0 1px 2px #000' }}>{tab.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Dynamic Search Box if search filter is selected */}
-            {leaderboardFilter === 'search' && (
-              <div style={{ marginBottom: '16px' }}>
-                <input 
-                  type="text" 
-                  placeholder="🔍 اكتب اسم القبطان للبحث..."
-                  value={leaderboardSearchQuery}
-                  onChange={(e) => setLeaderboardSearchQuery(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: '#1a120c',
-                    border: '1.5px solid #ca8a04',
-                    borderRadius: '10px',
-                    padding: '12px 14px',
-                    color: '#fff',
-                    fontSize: '15px',
-                    fontWeight: 'bold',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            )}
-
-            {/* The Podium (Top 3 Ranks Layout) */}
-            {(p1 || p2 || p3) ? (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'flex-end',
-                gap: '14px',
-                padding: '14px 0',
-                marginBottom: '18px',
-                minHeight: '230px'
-              }}>
-                
-                {/* RANK #2 (Left in Arabic / visually right-to-left layout) */}
-                {p2 && (
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    width: '110px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ position: 'relative', marginBottom: '8px' }}>
-                      <div style={{
-                        position: 'absolute',
-                        top: '-20px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 2,
-                        fontSize: '26px'
-                      }}>
-                        🥈
-                      </div>
-                      <div style={{
-                        width: '74px',
-                        height: '74px',
-                        borderRadius: '50%',
-                        border: '3.5px solid #cbd5e1',
-                        background: '#1c1917',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '34px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                        cursor: 'pointer'
-                      }} onClick={() => handleOpenProfile(p2)}>
-                        {p2.avatar || '⚓'}
-                      </div>
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '-6px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: '#64748b',
-                        color: '#fff',
-                        borderRadius: '50%',
-                        width: '24px',
-                        height: '24px',
-                        fontSize: '13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '900',
-                        border: '2px solid #cbd5e1'
-                      }}>
-                        2
-                      </div>
-                    </div>
-                    
-                    <div style={{
-                      background: 'linear-gradient(to bottom, #1e293b, #0f172a)',
-                      border: '1.5px solid #94a3b8',
-                      borderRadius: '8px',
-                      padding: '5px 10px',
-                      width: '106px',
-                      fontSize: '13px',
-                      fontWeight: '900',
-                      color: '#e2e8f0',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      marginBottom: '4px',
-                      textShadow: '0 1px 2px #000'
-                    }}>
-                      {p2.username}
-                    </div>
-                    {(() => {
-                      const stats = getPlayerStats(p2);
-                      return (
-                        <>
-                          <div style={{ fontSize: '12px', color: '#cbd5e1', fontWeight: '900' }}>{stats.totalStr}</div>
-                          <div style={{ fontSize: '11px', color: '#60a5fa', background: 'rgba(96,165,250,0.15)', padding: '2px 8px', borderRadius: '6px', marginTop: '3px', display: 'inline-block', fontWeight: 'bold' }}>
-                            🐟 {stats.typesStr}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* RANK #1 (Center - Elevated) */}
-                {p1 && (
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    width: '135px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ position: 'relative', marginBottom: '8px' }}>
-                      <div style={{
-                        position: 'absolute',
-                        top: '-30px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 2,
-                        fontSize: '34px',
-                        animation: 'bounce 2s infinite'
-                      }}>
-                        👑
-                      </div>
-                      <div style={{
-                        width: '90px',
-                        height: '90px',
-                        borderRadius: '50%',
-                        border: '4px solid #facc15',
-                        background: '#1c1917',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '42px',
-                        boxShadow: '0 0 20px rgba(250,204,21,0.4)',
-                        cursor: 'pointer'
-                      }} onClick={() => handleOpenProfile(p1)}>
-                        {p1.avatar || '⚓'}
-                      </div>
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '-6px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: '#ca8a04',
-                        color: '#fff',
-                        borderRadius: '50%',
-                        width: '26px',
-                        height: '26px',
-                        fontSize: '14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '900',
-                        border: '2px solid #facc15'
-                      }}>
-                        1
-                      </div>
-                    </div>
-                    
-                    <div style={{
-                      background: 'linear-gradient(to bottom, #78350f, #451a03)',
-                      border: '2px solid #facc15',
-                      borderRadius: '10px',
-                      padding: '6px 12px',
-                      width: '125px',
-                      fontSize: '14.5px',
-                      fontWeight: '900',
-                      color: '#fef08a',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      marginBottom: '4px',
-                      boxShadow: '0 3px 8px rgba(0,0,0,0.6)',
-                      textShadow: '0 1px 2px #000'
-                    }}>
-                      {p1.username}
-                    </div>
-                    {(() => {
-                      const stats = getPlayerStats(p1);
-                      return (
-                        <>
-                          <div style={{ fontSize: '13.5px', color: '#facc15', fontWeight: '900' }}>{stats.totalStr}</div>
-                          <div style={{ fontSize: '12px', color: '#22c55e', background: 'rgba(34,197,94,0.15)', padding: '2px 10px', borderRadius: '6px', marginTop: '3px', display: 'inline-block', fontWeight: '900' }}>
-                            🐟 {stats.typesStr}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* RANK #3 (Right) */}
-                {p3 && (
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    width: '110px',
-                    textAlign: 'center'
-                  }}>
-                    <div style={{ position: 'relative', marginBottom: '8px' }}>
-                      <div style={{
-                        position: 'absolute',
-                        top: '-20px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 2,
-                        fontSize: '26px'
-                      }}>
-                        🥉
-                      </div>
-                      <div style={{
-                        width: '74px',
-                        height: '74px',
-                        borderRadius: '50%',
-                        border: '3.5px solid #b45309',
-                        background: '#1c1917',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '34px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                        cursor: 'pointer'
-                      }} onClick={() => handleOpenProfile(p3)}>
-                        {p3.avatar || '⚓'}
-                      </div>
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '-6px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        background: '#7c2d12',
-                        color: '#fff',
-                        borderRadius: '50%',
-                        width: '24px',
-                        height: '24px',
-                        fontSize: '13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '900',
-                        border: '2px solid #b45309'
-                      }}>
-                        3
-                      </div>
-                    </div>
-                    
-                    <div style={{
-                      background: 'linear-gradient(to bottom, #431407, #1a0500)',
-                      border: '1.5px solid #b45309',
-                      borderRadius: '8px',
-                      padding: '5px 10px',
-                      width: '106px',
-                      fontSize: '13px',
-                      fontWeight: '900',
-                      color: '#fed7aa',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      marginBottom: '4px',
-                      textShadow: '0 1px 2px #000'
-                    }}>
-                      {p3.username}
-                    </div>
-                    {(() => {
-                      const stats = getPlayerStats(p3);
-                      return (
-                        <>
-                          <div style={{ fontSize: '12px', color: '#cbd5e1', fontWeight: '900' }}>{stats.totalStr}</div>
-                          <div style={{ fontSize: '11px', color: '#f97316', background: 'rgba(249,115,22,0.15)', padding: '2px 8px', borderRadius: '6px', marginTop: '3px', display: 'inline-block', fontWeight: 'bold' }}>
-                            🐟 {stats.typesStr}
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-
-              </div>
-            ) : null}
-
-            {/* List Header for remaining players */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              padding: '6px 12px',
-              background: '#150f0b',
-              border: '1px solid #3c2919',
-              borderRadius: '8px',
-              fontSize: '11px',
-              color: '#a8a29e',
-              marginBottom: '8px',
-              fontWeight: 'bold'
-            }}>
-              <span>القبطان والمستوى</span>
-              <span>نتائج الصيد والموارد</span>
-            </div>
-
-            {/* Remaining Ranks List (4th onwards) */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              maxHeight: '280px',
-              overflowY: 'auto',
-              paddingRight: '2px'
-            }} className="no-scrollbar">
-              {remainder.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '24px',
-                  color: '#a8a29e',
-                  fontSize: '12px',
-                  background: '#150f0b',
-                  borderRadius: '10px',
-                  border: '1px dashed #3c2919'
-                }}>
-                  📜 لا يوجد متصدرين آخرين في هذه الفئة حالياً.
-                </div>
-              ) : (
-                remainder.map((player, index) => {
-                  const rank = index + 4;
-                  const isMe = player.userId === auth.currentUser?.uid;
-                  const stats = getPlayerStats(player);
-
-                  return (
-                    <div
-                      key={player.id}
-                      onClick={() => handleOpenProfile(player)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        background: isMe ? 'rgba(202,138,4,0.12)' : '#17110c',
-                        border: isMe ? '1.5px solid #ca8a04' : '1px solid #2d1e12',
-                        padding: '10px 12px',
-                        borderRadius: '12px',
-                        cursor: 'pointer',
-                        transition: 'transform 0.15s'
-                      }}
-                      className="leaderboard-row-hover"
-                    >
-                      {/* Right Part (Rank Badge, Avatar, Username badge) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        
-                        {/* Hexagonal styled rank badge */}
-                        <div style={{
-                          width: '34px',
-                          height: '34px',
-                          clipPath: 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                          background: '#3c2919',
-                          border: '1.5px solid #78350f',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '14.5px',
-                          fontWeight: '900',
-                          color: '#facc15'
-                        }}>
-                          {rank}
-                        </div>
-
-                        {/* User Avatar with decorative gold border */}
-                        <div style={{
-                          width: '52px',
-                          height: '52px',
-                          borderRadius: '50%',
-                          border: '2.5px solid #a16207',
-                          background: '#0a0502',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '28px',
-                          boxShadow: 'inset 0 0 6px rgba(202,138,4,0.35)'
-                        }}>
-                          {player.avatar || '⚓'}
-                        </div>
-
-                        {/* Styled User Badge */}
-                        <div style={{
-                          background: isMe ? 'linear-gradient(to left, #7c2d12, #451a03)' : 'linear-gradient(to left, #2e1d11, #170f08)',
-                          border: isMe ? '1.5px solid #ca8a04' : '1.5px solid #4a3424',
-                          borderRadius: '10px',
-                          padding: '6px 14px',
-                          fontSize: '14.5px',
-                          fontWeight: '900',
-                          color: isMe ? '#fef08a' : '#fff',
-                          textShadow: '0 1px 2px #000'
-                        }}>
-                          {player.username} {isMe ? '👤' : ''}
-                        </div>
-                      </div>
-
-                      {/* Left Part (Statistics count and fish types count) */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: '15px', fontWeight: '900', color: '#fef08a', textShadow: '0 1px 2px #000' }}>
-                            {stats.totalStr}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#60a5fa', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: '2px' }}>
-                            <span>{stats.typesStr}</span>
-                            <span>🐟</span>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Close Button at bottom */}
-            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
-              <button
-                className="close-tab-btn"
-                onClick={() => setActiveTab('harbor')}
-                style={{
-                  background: 'linear-gradient(to bottom, #ca8a04, #a16207)',
-                  border: '1.5px solid #fef08a',
-                  color: '#000',
-                  fontWeight: '900',
-                  padding: '12px 38px',
-                  borderRadius: '12px',
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                إغلاق
-              </button>
-            </div>
-
-            {/* Real Donation Modal Popup */}
-            {donationTargetPlayer && (
-              <div style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundColor: 'rgba(0,0,0,0.85)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 999,
-                direction: 'rtl',
-                padding: '16px'
-              }}>
-                <div style={{
-                  background: 'linear-gradient(to bottom, #1c130c, #0f0a06)',
-                  border: '2px solid #ca8a04',
-                  borderRadius: '14px',
-                  width: '100%',
-                  maxWidth: '400px',
-                  padding: '20px',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.8)'
-                }}>
-                  <h3 style={{ margin: '0 0 12px 0', color: '#facc15', fontSize: '18px', textAlign: 'center' }}>
-                    🪙 إرسال دعم ذهبي للقبطان
-                  </h3>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#130d09', padding: '10px', borderRadius: '10px', border: '1px solid #3c2919', marginBottom: '16px' }}>
-                    <span style={{ fontSize: '32px' }}>{donationTargetPlayer.avatar || '⚓'}</span>
-                    <div>
-                      <div style={{ fontWeight: 'bold', color: '#fff' }}>@{donationTargetPlayer.username}</div>
-                      <div style={{ fontSize: '11px', color: '#a8a29e' }}>رصيده الحالي: 🪙 {(donationTargetPlayer.gold || 0).toLocaleString()} ذهبة</div>
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '12px' }}>
-                    رصيدك الحالي المتاح للإرسال: <span style={{ color: '#22c55e', fontWeight: 'bold' }}>🪙 {gold.toLocaleString()} ذهبة</span>
-                  </div>
-
-                  <label style={{ display: 'block', fontSize: '12px', color: '#fef08a', marginBottom: '6px' }}>حدد مبلغ الدعم الذهبي:</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '14px' }}>
-                    {[500, 2500, 10000, 50000].map(amt => (
-                      <button
-                        key={amt}
-                        onClick={() => setDonationAmount(amt)}
-                        style={{
-                          background: donationAmount === amt ? '#ca8a04' : '#130d09',
-                          color: donationAmount === amt ? '#000' : '#facc15',
-                          border: '1px solid #ca8a04',
-                          borderRadius: '6px',
-                          padding: '6px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        {amt >= 1000 ? `${amt/1000}K` : amt}
-                      </button>
-                    ))}
-                  </div>
-
-                  <input 
-                    type="number"
-                    min="1"
-                    max={gold}
-                    value={donationAmount}
-                    onChange={(e) => setDonationAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                    تأكيد الإرسال 🚢
+                  </button>
+                  <button
+                    onClick={() => setDonationTargetPlayer(null)}
                     style={{
-                      width: '100%',
-                      background: '#130d09',
-                      border: '1.5px solid #3c2919',
+                      flex: 1,
+                      background: '#1f1610',
+                      color: '#a8a29e',
+                      border: '1px solid #3c2919',
                       borderRadius: '8px',
-                      padding: '8px',
-                      color: '#fff',
-                      fontSize: '14px',
-                      outline: 'none',
-                      textAlign: 'center',
-                      marginBottom: '16px'
+                      padding: '10px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      fontSize: '13px'
                     }}
-                  />
-
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={async () => {
-                        if (donationAmount <= 0) {
-                          alert("الرجاء تحديد مبلغ دعم صحيح!");
-                          return;
-                        }
-                        if (gold < donationAmount) {
-                          alert("⚠️ رصيدك من الذهب لا يكفي لإتمام عملية التبرع!");
-                          return;
-                        }
-                        if (donationTargetPlayer.userId === auth.currentUser?.uid) {
-                          alert("⚠️ لا يمكنك إرسال ذهب لنفسك!");
-                          return;
-                        }
-
-                        try {
-                          const senderRef = doc(db, 'users', auth.currentUser!.uid);
-
-                          // Optimistic update local
-                          setGold(prev => Math.max(0, prev - donationAmount));
-
-                          // Sync own gold to firestore
-                          await updateDoc(senderRef, { gold: Math.max(0, gold - donationAmount) });
-
-                          // Secure collection-based dispatch to /harborEvents
-                          await createHarborEvent(donationTargetPlayer.userId, 'DONATION', {
-                            amount: donationAmount,
-                            senderName: username
-                          });
-
-                          // Push announcement to chat
-                          sendSecureChatMessage(
-                            '📢 نقابة الكرماء',
-                            '🤝',
-                            `✨ تبرع القبطان الكرم @${username} بمبلغ 🪙 ${donationAmount.toLocaleString()} ذهبة كهدية دعم للقبطان @${donationTargetPlayer.username}!`
-                          );
-
-                          showToast(`🎉 تم إرسال 🪙 ${donationAmount.toLocaleString()} ذهبة للقبطان @${donationTargetPlayer.username} بنجاح!`, 'success');
-                          setDonationTargetPlayer(null);
-                        } catch (err: any) {
-                          console.error("Error doing donation transfer: ", err);
-                          showToast("فشلت عملية التبرع: " + (err.message || 'خطأ في الاتصال'), 'error');
-                        }
-                      }}
-                      style={{
-                        flex: 1,
-                        background: 'linear-gradient(to bottom, #10b981, #047857)',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '10px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        fontSize: '13px'
-                      }}
-                    >
-                      تأكيد الإرسال 🚢
-                    </button>
-                    <button
-                      onClick={() => setDonationTargetPlayer(null)}
-                      style={{
-                        flex: 1,
-                        background: '#1f1610',
-                        color: '#a8a29e',
-                        border: '1px solid #3c2919',
-                        borderRadius: '8px',
-                        padding: '10px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        fontSize: '13px'
-                      }}
-                    >
-                      إلغاء
-                    </button>
-                  </div>
-
+                  >
+                    إلغاء
+                  </button>
                 </div>
               </div>
-            )}
-
-          </div>
-        );
-      })()}
+            </div>
+          )}
+        </>
+      )}
 
       {/* ----------------- LOADING STATE OVERLAY (جاري فتح الملف الشخصي) ----------------- */}
       {isProfileLoading && (
@@ -12837,11 +12175,7 @@ export default function App() {
                 <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                   <button 
                     onClick={() => {
-                      if (inspectedPlayer.activeAd === 'luffy_king') {
-                        playLuffyAdSound();
-                      } else {
-                        playAdPoemSound();
-                      }
+                      playDetonationWarningVoiceAndSound();
                     }}
                     style={{
                       flex: 1,

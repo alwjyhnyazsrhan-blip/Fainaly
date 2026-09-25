@@ -25,22 +25,23 @@ export const InGameNotificationBanner: React.FC<InGameNotificationBannerProps> =
     }
 
     const durationMs = 4500;
-    const intervalTime = 45;
+    const intervalTime = 50;
     const step = (intervalTime / durationMs) * 100;
 
     setProgress(100);
+
+    const timer = setTimeout(() => {
+      onDismiss();
+    }, durationMs);
+
     const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev <= 0) {
-          clearInterval(interval);
-          onDismiss();
-          return 0;
-        }
-        return Math.max(0, prev - step);
-      });
+      setProgress((prev) => Math.max(0, prev - step));
     }, intervalTime);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [notification?.id, notification?.createdAt, onDismiss]);
 
   if (!notification) return null;

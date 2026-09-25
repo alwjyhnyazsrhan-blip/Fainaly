@@ -167,8 +167,14 @@ export async function registerNewUserSession(userId: string): Promise<{ sessionI
     }, { merge: true });
     
     console.log(`[SESSION] New session registered: ${newSessionId} for user ${userId} on device ${deviceId} (${deviceInfo})`);
-  } catch (error) {
-    console.error('[SESSION] Failed to register session in Firestore:', error);
+  } catch (error: any) {
+    const isOffline = error?.code === 'unavailable' || 
+                      error?.message?.toLowerCase().includes('offline');
+    if (isOffline) {
+      console.warn('[SESSION] Client is offline; session registration will sync when connection is restored.');
+    } else {
+      console.warn('[SESSION] Notice registering session in Firestore:', error?.message || error);
+    }
   }
 
   return { sessionId: newSessionId, deviceId };
@@ -285,11 +291,19 @@ export async function verifyActiveSession(userId?: string): Promise<{
       isSameDevice: false
     };
   } catch (error: any) {
-    console.error('[SESSION] Error checking session status in Firestore:', error);
+    const isOffline = error?.code === 'unavailable' || 
+                      error?.message?.toLowerCase().includes('offline') ||
+                      (typeof navigator !== 'undefined' && !navigator.onLine);
+    if (isOffline) {
+      console.warn('[SESSION] Client is offline; maintaining current local session state seamlessly.');
+    } else {
+      console.warn('[SESSION] Note while checking session status in Firestore:', error?.message || error);
+    }
     return {
       isValid: true,
       localSessionId,
-      error: error.message
+      isSameDevice: true,
+      error: error?.message
     };
   }
 }
